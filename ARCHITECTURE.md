@@ -41,6 +41,8 @@ Phase 0 adapters
   ├─ SimulatedClaimChannel
   ├─ SimulatedOutcomeSource
   ├─ HiraHospitalOpenApiSource (개발키 필요)
+  ├─ InsuranceCompanyDirectory (협회·보험사 공식 대표번호 snapshot)
+  ├─ Kakao/OpenStreetMap insurer office discovery
   ├─ NHIS / 내보험찾아줌 / 실손24 / HIRA official web navigator
   └─ LocalAuditSink
 ```
@@ -124,6 +126,15 @@ Claim Radar는 보험금 액수를 확정하지 않고 `candidate`, `needs_revie
 - 키가 없거나 SDK 호출이 실패하면 OpenStreetMap 타일과 Overpass 병원 데이터를 사용한다. Overpass endpoint 이중화, 10초 timeout, 위치 단위 session cache를 적용한다.
 - 전화·진료시간·사진은 provider 응답에 있는 값만 표시한다. 누락값은 생성하지 않고 카카오/OSM 장소 상세 또는 병원 홈페이지로 연결한다.
 - 길찾기와 로드뷰는 카카오 공식 deep link를 사용하며 보험금 유불리는 검색·정렬 신호로 사용하지 않는다.
+
+### 보험사 지도·고객센터 adapter
+
+- 병원 화면에서 `병원 찾기 / 보험사 찾기` 레이어를 분리하고 서로 다른 마커와 쉬운 문장으로 표시한다.
+- 카카오 키가 있으면 주변 `보험사` 키워드 검색을 사용하고, 없으면 Nominatim → Overpass 순으로 공개 보험사 위치를 거리순으로 표시한다.
+- 짧은 회사명 검색은 공식 디렉터리의 별칭과 현재 회사명을 먼저 매칭한 뒤 공개 지도 결과를 좁힌다. 예: `삼성` → 삼성생명·삼성화재, `MG손해보험` → 예별손해보험.
+- 지도 지점에 전화번호가 없으면 공식 디렉터리의 대표 고객센터 번호로 보완한다. 지점 고유번호가 있으면 지점 번호를 우선한다.
+- 대표번호 snapshot은 생명보험협회·손해보험협회 및 회사 공식 페이지를 대조하고 검증일을 UI에 표시한다. 지도 위치 자체는 공개 데이터이므로 누락 가능성을 명시한다.
+- Leaflet 실행 코드는 앱에 포함해 외부 script CDN 장애와 지도 전환 race condition을 피한다. 서울 기본 중심에서는 live 위치 provider가 모두 실패해도 마지막으로 검증한 OSM 지점 snapshot을 표시한다.
 
 ## 8. 배포 단위
 

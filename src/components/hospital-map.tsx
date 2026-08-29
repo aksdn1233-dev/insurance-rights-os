@@ -1,14 +1,17 @@
 'use dom';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import 'leaflet/dist/leaflet.css';
 
-import type { HospitalPlace, MapConnectionStatus } from '@/integrations/hospital-discovery';
+import { filterInsuranceCompanies, findInsuranceCompany } from '@/integrations/insurance-company-directory';
+import type { HospitalPlace, MapConnectionStatus, MapLayer } from '@/integrations/hospital-discovery';
 
 type MapMode = 'roadmap' | 'skyview' | 'roadview';
 
 type Props = {
   latitude: number;
   longitude: number;
+  layer: MapLayer;
   query: string;
   selectedId?: string;
   onResults: (places: HospitalPlace[]) => Promise<void>;
@@ -141,6 +144,176 @@ async function fetchNominatimHospitals(latitude: number, longitude: number, quer
   }
 }
 
+function enrichInsurer(place: HospitalPlace): HospitalPlace {
+  const company = findInsuranceCompany(place.name);
+  return {
+    ...place,
+    entityType: 'insurer',
+    companyId: company?.id,
+    category: company ? (company.type === 'life' ? '생명보험' : '손해보험') : '보험사·고객센터',
+    phone: place.phone || company?.customerCenter,
+    website: company?.website || place.website,
+    openingHours: company?.hours || place.openingHours,
+    officialSourceUrl: company?.officialSourceUrl,
+  };
+}
+
+function filterInsurerPlaces(places: HospitalPlace[], query: string) {
+  const directoryMatches = filterInsuranceCompanies(query);
+  if (directoryMatches.length) {
+    const companyIds = new Set(directoryMatches.map((company) => company.id));
+    return places.filter((place) => place.companyId && companyIds.has(place.companyId));
+  }
+  const target = query.trim().toLocaleLowerCase('ko-KR');
+  return target
+    ? places.filter((place) => `${place.name} ${place.category}`.toLocaleLowerCase('ko-KR').includes(target))
+    : places;
+}
+
+// Last-resort Seoul snapshot from OpenStreetMap. It keeps the default map useful during
+// short provider outages; live Nominatim/Overpass results always take priority.
+const SEOUL_INSURANCE_OFFICES = [
+  ['relation-8311183', '삼성생명 서초타워', '삼성생명 서초타워, 4, 서초대로74길, 서초구, 서울특별시', 37.496768, 127.0259525],
+  ['way-836429866', '한화생명', '한화생명, 세종대로4길, 중구, 서울특별시', 37.5575058, 126.9755726],
+  ['way-1046547844', '삼성화재 강북고객지원센터', '168, 왕산로, 동대문구, 서울특별시', 37.5788363, 127.0422248],
+  ['way-557469327', 'KB손해보험 본사', '117, 테헤란로, 강남구, 서울특별시', 37.4991784, 127.0302668],
+  ['way-553514843', 'DB손해보험 빌딩', '35, 마른내로, 중구, 서울특별시', 37.564661, 126.9917032],
+  ['way-299640425', '삼성화재', '양화로, 마포구, 서울특별시', 37.5520119, 126.9166417],
+  ['way-845055288', '메리츠화재 봉래동1빌딩', '세종대로5길, 중구, 서울특별시', 37.5589664, 126.9726101],
+  ['way-845055289', '메리츠화재 봉래동2빌딩', '세종대로5길, 중구, 서울특별시', 37.5587972, 126.9724018],
+  ['way-547175589', '흥국화재빌딩', '442, 강남대로, 강남구, 서울특별시', 37.5020617, 127.0260813],
+  ['way-142096702', '현대해상빌딩', '163, 세종대로, 종로구, 서울특별시', 37.5710095, 126.9761511],
+  ['way-804475777', 'Met Life', '테헤란로48길, 강남구, 서울특별시', 37.5030807, 127.0455669],
+  ['way-358319357', '현대해상', '남대문로, 중구, 서울특별시', 37.5622746, 126.9821497],
+  ['way-845055290', '메리츠화재 봉래동3빌딩', '세종대로5길, 중구, 서울특별시', 37.5587259, 126.9721435],
+  ['node-11012630346', '삼성화재', '을지로, 중구, 서울특별시', 37.5662139, 126.9798246],
+  ['node-2102639997', '현대해상강남사옥', '테헤란로19길, 강남구, 서울특별시', 37.5001221, 127.033898],
+] as const;
+
+function seoulInsuranceFallback(latitude: number, longitude: number, query: string) {
+  const places = SEOUL_INSURANCE_OFFICES.map(([id, name, address, lat, lng]) => enrichInsurer({
+    id,
+    name,
+    category: '보험사·고객센터',
+    address,
+    latitude: lat,
+    longitude: lng,
+    distanceMeters: distanceBetween(latitude, longitude, lat, lng),
+    placeUrl: `https://www.openstreetmap.org/${id.replace('-', '/')}`,
+    source: 'OPENSTREETMAP',
+  })).filter((place) => (place.distanceMeters ?? Infinity) <= 30000);
+  return filterInsurerPlaces(places, query)
+    .sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
+    .slice(0, 15);
+}
+
+async function fetchOverpassInsuranceOffices(latitude: number, longitude: number, query: string): Promise<HospitalPlace[]> {
+  const roundedLatitude = Number(latitude.toFixed(3));
+  const roundedLongitude = Number(longitude.toFixed(3));
+  const statement = `[out:json][timeout:12];(nwr["office"="insurance"](around:15000,${roundedLatitude},${roundedLongitude}););out center tags 50;`;
+  const endpoints = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+  ];
+  let lastError: unknown;
+  for (const endpoint of endpoints) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(`${endpoint}?data=${encodeURIComponent(statement)}`, { signal: controller.signal });
+      if (!response.ok) throw new Error(`OVERPASS_INSURANCE_${response.status}`);
+      const payload = await response.json() as { elements?: Record<string, any>[] };
+      const places = (payload.elements ?? []).map<HospitalPlace | null>((element) => {
+        const tags = (element.tags ?? {}) as Record<string, string>;
+        const lat = Number(element.lat ?? element.center?.lat);
+        const lng = Number(element.lon ?? element.center?.lon);
+        if (!tags.name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return enrichInsurer({
+          id: `${element.type}-${element.id}`,
+          name: tags['name:ko'] || tags.name,
+          category: '보험사·고객센터',
+          address: addressFromTags(tags),
+          phone: tags.phone || tags['contact:phone'],
+          latitude: lat,
+          longitude: lng,
+          distanceMeters: distanceBetween(latitude, longitude, lat, lng),
+          openingHours: tags.opening_hours,
+          website: tags.website || tags['contact:website'],
+          imageUrl: safeRemoteImage(tags),
+          placeUrl: `https://www.openstreetmap.org/${element.type}/${element.id}`,
+          source: 'OPENSTREETMAP',
+        });
+      }).filter((place): place is HospitalPlace => Boolean(place));
+      return filterInsurerPlaces(places, query)
+        .sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
+        .slice(0, 15);
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  const fallback = seoulInsuranceFallback(latitude, longitude, query);
+  if (fallback.length) return fallback;
+  throw lastError ?? new Error('OPEN_INSURANCE_SEARCH_UNAVAILABLE');
+}
+
+async function fetchOpenInsuranceOffices(latitude: number, longitude: number, query: string): Promise<HospitalPlace[]> {
+  const directoryMatches = filterInsuranceCompanies(query);
+  const searchTerm = !query.trim() || directoryMatches.length > 1
+    ? 'insurance'
+    : directoryMatches[0]?.name || query.trim();
+  const params = new URLSearchParams({
+    q: searchTerm,
+    format: 'jsonv2',
+    countrycodes: 'kr',
+    viewbox: `${longitude - 0.09},${latitude + 0.07},${longitude + 0.09},${latitude - 0.07}`,
+    bounded: '1',
+    limit: '15',
+    namedetails: '1',
+    extratags: '1',
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`NOMINATIM_INSURANCE_${response.status}`);
+    const payload = await response.json() as Record<string, any>[];
+    const places = payload.map((item) => {
+      const lat = Number(item.lat);
+      const lng = Number(item.lon);
+      const tags = (item.extratags ?? {}) as Record<string, string>;
+      const osmType = item.osm_type === 'relation' ? 'relation' : item.osm_type === 'node' ? 'node' : 'way';
+      return enrichInsurer({
+        id: `${osmType}-${item.osm_id}`,
+        name: item.namedetails?.['name:ko'] || item.namedetails?.name || item.display_name.split(',')[0],
+        category: '보험사·고객센터',
+        address: item.display_name,
+        phone: tags.phone || tags['contact:phone'],
+        latitude: lat,
+        longitude: lng,
+        distanceMeters: distanceBetween(latitude, longitude, lat, lng),
+        openingHours: tags.opening_hours,
+        website: tags.website || tags['contact:website'],
+        imageUrl: safeRemoteImage(tags),
+        placeUrl: `https://www.openstreetmap.org/${osmType}/${item.osm_id}`,
+        source: 'OPENSTREETMAP',
+      });
+    });
+    const filtered = directoryMatches.length > 1 ? filterInsurerPlaces(places, query) : places;
+    return filtered.sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity));
+  } catch {
+    const fallback = seoulInsuranceFallback(latitude, longitude, query);
+    if (fallback.length) return fallback;
+    return fetchOverpassInsuranceOffices(latitude, longitude, query);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchOpenHospitals(latitude: number, longitude: number, query: string): Promise<HospitalPlace[]> {
   const roundedLatitude = Number(latitude.toFixed(3));
   const roundedLongitude = Number(longitude.toFixed(3));
@@ -222,18 +395,10 @@ async function fetchOpenHospitals(latitude: number, longitude: number, query: st
     .slice(0, 15);
 }
 
-function ensureLeafletStyle() {
-  if (document.getElementById('leaflet-css')) return;
-  const link = document.createElement('link');
-  link.id = 'leaflet-css';
-  link.rel = 'stylesheet';
-  link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-  document.head.appendChild(link);
-}
-
 export default function HospitalMap({
   latitude,
   longitude,
+  layer,
   query,
   selectedId,
   onResults,
@@ -243,7 +408,7 @@ export default function HospitalMap({
 }: Props) {
   const [mode, setMode] = useState<MapMode>('roadmap');
   const [provider, setProvider] = useState<'kakao' | 'open'>('open');
-  const [message, setMessage] = useState('가까운 병원을 찾고 있어요');
+  const [message, setMessage] = useState(layer === 'hospital' ? '가까운 병원을 찾고 있어요' : '가까운 보험사를 찾고 있어요');
   const engineRef = useRef<MapEngine | null>(null);
   const placesRef = useRef<HospitalPlace[]>([]);
   const selectedIdRef = useRef(selectedId);
@@ -256,6 +421,7 @@ export default function HospitalMap({
 
   useEffect(() => {
     let cancelled = false;
+    let activeLeafletMap: any;
     const mapElement = document.getElementById('hospital-map');
     const roadviewElement = document.getElementById('hospital-roadview');
     if (!mapElement || !roadviewElement) return;
@@ -287,10 +453,11 @@ export default function HospitalMap({
 
       function renderPlaces(raw: Record<string, string>[]) {
         markers.forEach((marker) => marker.setMap(null));
-        const places = raw.map((item) => ({
+        const places = raw.map((item) => {
+          const place = {
           id: item.id,
           name: item.place_name,
-          category: item.category_name?.split(' > ').at(-1) || '의료기관',
+          category: item.category_name?.split(' > ').at(-1) || (layer === 'hospital' ? '의료기관' : '보험사·고객센터'),
           address: item.road_address_name || item.address_name,
           phone: item.phone || undefined,
           latitude: Number(item.y),
@@ -298,7 +465,10 @@ export default function HospitalMap({
           distanceMeters: item.distance ? Number(item.distance) : undefined,
           placeUrl: item.place_url,
           source: 'KAKAO' as const,
-        } satisfies HospitalPlace));
+          entityType: layer === 'hospital' ? 'hospital' as const : 'insurer' as const,
+          } satisfies HospitalPlace;
+          return layer === 'insurance' ? enrichInsurer(place) : place;
+        });
         placesRef.current = places;
         places.forEach((place) => {
           const marker = new kakao.maps.Marker({ position: new kakao.maps.LatLng(place.latitude, place.longitude), map });
@@ -307,7 +477,7 @@ export default function HospitalMap({
         });
         void onResults(places);
         if (places[0]) void onSelect(places[0]);
-        setMessage(places.length ? `가까운 병원 ${places.length}곳을 찾았어요` : '이 근처에서는 검색 결과를 찾지 못했어요');
+        setMessage(places.length ? `가까운 ${layer === 'hospital' ? '병원' : '보험사'} ${places.length}곳을 찾았어요` : '이 근처에서는 검색 결과를 찾지 못했어요');
       }
 
       const placesService = new kakao.maps.services.Places(map);
@@ -315,11 +485,12 @@ export default function HospitalMap({
         if (status === kakao.maps.services.Status.OK) renderPlaces(data);
         else {
           void onResults([]);
-          setMessage('검색 결과가 없어요. 진료과 이름을 바꿔 보세요');
+          setMessage(layer === 'hospital' ? '검색 결과가 없어요. 진료과 이름을 바꿔 보세요' : '검색 결과가 없어요. 보험사 이름을 바꿔 보세요');
         }
       };
       const options = { location: position, radius: 5000, sort: kakao.maps.services.SortBy.DISTANCE, size: 15 };
-      if (query.trim()) placesService.keywordSearch(`${query.trim()} 병원`, callback, options);
+      if (layer === 'insurance') placesService.keywordSearch(query.trim() || '보험사', callback, options);
+      else if (query.trim()) placesService.keywordSearch(`${query.trim()} 병원`, callback, options);
       else placesService.categorySearch('HP8', callback, options);
 
       engineRef.current = {
@@ -338,7 +509,7 @@ export default function HospitalMap({
             const target = new kakao.maps.LatLng(selected.latitude, selected.longitude);
             roadviewClient.getNearestPanoId(target, 100, (panoId: number | null) => {
               if (!panoId) {
-                setMessage('이 병원 주변에는 로드뷰 촬영 지점이 없어요');
+                setMessage(`이 ${layer === 'hospital' ? '병원' : '보험사'} 주변에는 로드뷰 촬영 지점이 없어요`);
                 return;
               }
               mapContainer.style.display = 'none';
@@ -359,14 +530,13 @@ export default function HospitalMap({
     }
 
     async function startOpenMap() {
-      ensureLeafletStyle();
-      await loadScript('leaflet-sdk', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
+      const leaflet = (await import('leaflet')).default;
       if (cancelled) return;
-      const leaflet = (window as any).L;
       const map = leaflet.map(mapContainer, { zoomControl: false, attributionControl: true }).setView(
         [center.latitude, center.longitude],
         14
       );
+      activeLeafletMap = map;
       leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap',
@@ -375,19 +545,26 @@ export default function HospitalMap({
       const currentIcon = leaflet.divIcon({ className: 'current-marker', html: '<span></span>', iconSize: [20, 20] });
       leaflet.marker([center.latitude, center.longitude], { icon: currentIcon }).addTo(map);
 
-      const places = await fetchOpenHospitals(center.latitude, center.longitude, query);
+      const places = layer === 'hospital'
+        ? await fetchOpenHospitals(center.latitude, center.longitude, query)
+        : await fetchOpenInsuranceOffices(center.latitude, center.longitude, query);
       if (cancelled) return;
       placesRef.current = places;
-      const hospitalIcon = leaflet.divIcon({ className: 'hospital-marker', html: '<span>+</span>', iconSize: [34, 34], iconAnchor: [17, 17] });
+      const markerIcon = leaflet.divIcon({
+        className: layer === 'hospital' ? 'hospital-marker' : 'insurance-marker',
+        html: layer === 'hospital' ? '<span>+</span>' : '<span><i></i><i></i><i></i></span>',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+      });
       places.forEach((place) => {
-        leaflet.marker([place.latitude, place.longitude], { icon: hospitalIcon })
+        leaflet.marker([place.latitude, place.longitude], { icon: markerIcon })
           .addTo(map)
           .bindTooltip(place.name, { direction: 'top', offset: [0, -17] })
           .on('click', () => void onSelect(place));
       });
       void onResults(places);
       if (places[0]) void onSelect(places[0]);
-      setMessage(places.length ? `가까운 병원 ${places.length}곳을 찾았어요` : '이 근처의 공개 병원 정보가 아직 적어요');
+      setMessage(places.length ? `가까운 ${layer === 'hospital' ? '병원' : '보험사'} ${places.length}곳을 찾았어요` : `이 근처의 공개 ${layer === 'hospital' ? '병원' : '보험사'} 정보가 아직 적어요`);
       setProvider('open');
       void onStatus('open');
       engineRef.current = {
@@ -404,6 +581,7 @@ export default function HospitalMap({
         },
         destroy() {
           map.remove();
+          activeLeafletMap = undefined;
         },
       };
     }
@@ -431,12 +609,13 @@ export default function HospitalMap({
 
     return () => {
       cancelled = true;
-      engineRef.current?.destroy();
+      if (engineRef.current) engineRef.current.destroy();
+      else if (activeLeafletMap) activeLeafletMap.remove();
       engineRef.current = null;
       mapContainer.innerHTML = '';
       roadviewContainer.innerHTML = '';
     };
-  }, [center.latitude, center.longitude, onResults, onSelect, onStatus, openExternal, query]);
+  }, [center.latitude, center.longitude, layer, onResults, onSelect, onStatus, openExternal, query]);
 
   useEffect(() => {
     engineRef.current?.setMode(mode);
@@ -464,10 +643,14 @@ export default function HospitalMap({
         .current-marker span { display: block; width: 18px; height: 18px; border: 4px solid #fff; border-radius: 50%; background: #3182f6; box-shadow: 0 2px 9px rgba(49,130,246,.5); }
         .hospital-marker { border: 0; background: transparent; }
         .hospital-marker span { display: flex; width: 34px; height: 34px; align-items: center; justify-content: center; border: 3px solid #fff; border-radius: 12px; background: #3182f6; box-shadow: 0 3px 10px rgba(25,31,40,.22); color: #fff; font-size: 21px; font-weight: 700; }
+        .insurance-marker { border: 0; background: transparent; }
+        .insurance-marker span { display: flex; width: 34px; height: 34px; align-items: flex-end; justify-content: center; gap: 2px; padding: 8px 7px; border: 3px solid #fff; border-radius: 12px; background: #191f28; box-shadow: 0 3px 10px rgba(25,31,40,.22); }
+        .insurance-marker i { display: block; width: 4px; height: 13px; border-radius: 2px 2px 0 0; background: #fff; }
+        .insurance-marker i:nth-child(2) { height: 17px; }
         .leaflet-control-attribution { font-size: 8px !important; }
       `}</style>
-      <div id="hospital-map" aria-label="가까운 병원 지도" />
-      <div id="hospital-roadview" aria-label="선택한 병원 주변 로드뷰" />
+      <div id="hospital-map" aria-label={`가까운 ${layer === 'hospital' ? '병원' : '보험사'} 지도`} />
+      <div id="hospital-roadview" aria-label={`선택한 ${layer === 'hospital' ? '병원' : '보험사'} 주변 로드뷰`} />
       <div className="mode-switch" aria-label="지도 보기 방식">
         <button className={`mode-button ${mode === 'roadmap' ? 'active' : ''}`} onClick={() => setMode('roadmap')}>지도</button>
         <button className={`mode-button ${mode === 'skyview' ? 'active' : ''}`} onClick={() => setMode('skyview')}>스카이뷰</button>

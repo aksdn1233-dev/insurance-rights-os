@@ -12,7 +12,12 @@ export type HospitalPlace = {
   imageUrl?: string;
   placeUrl: string;
   source: 'KAKAO' | 'OPENSTREETMAP';
+  entityType?: 'hospital' | 'insurer';
+  companyId?: string;
+  officialSourceUrl?: string;
 };
+
+export type MapLayer = 'hospital' | 'insurance';
 
 export type MapConnectionStatus = 'loading' | 'kakao' | 'open' | 'location_denied' | 'error';
 

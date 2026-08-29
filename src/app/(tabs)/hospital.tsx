@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
 import * as WebBrowser from 'expo-web-browser';
@@ -17,19 +17,27 @@ import HospitalMap from '@/components/hospital-map';
 import { Eyebrow, Page, SectionHeader, StatusPill, Surface, TextButton, Title } from '@/components/product-ui';
 import { palette, space, type } from '@/constants/product-theme';
 import {
+  filterInsuranceCompanies,
+  InsuranceCompanyType,
+  LIFE_ASSOCIATION_SOURCE,
+  NON_LIFE_ASSOCIATION_SOURCE,
+} from '@/integrations/insurance-company-directory';
+import {
   DEFAULT_MAP_CENTER,
   formatDistance,
   HospitalPlace,
   kakaoDirectionsUrl,
   kakaoRoadviewUrl,
   MapConnectionStatus,
+  MapLayer,
   phoneLink,
   readableOpeningHours,
   searchKoreanLocation,
 } from '@/integrations/hospital-discovery';
 import { officialServices, openOfficialService } from '@/integrations/official-services';
 
-const quickSearches = ['내과', '소아청소년과', '정형외과', '산부인과'];
+const hospitalQuickSearches = ['내과', '소아청소년과', '정형외과', '산부인과'];
+const insuranceQuickSearches = ['삼성', '현대', 'DB', 'KB'];
 
 async function openTrustedUrl(url: string) {
   try {
@@ -42,6 +50,7 @@ async function openTrustedUrl(url: string) {
 }
 
 export default function HospitalScreen() {
+  const [layer, setLayer] = useState<MapLayer>('hospital');
   const [query, setQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
   const [places, setPlaces] = useState<HospitalPlace[]>([]);
@@ -53,6 +62,16 @@ export default function HospitalScreen() {
   const [areaQuery, setAreaQuery] = useState('');
   const [areaState, setAreaState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [failedImageId, setFailedImageId] = useState<string>();
+  const [directoryType, setDirectoryType] = useState<InsuranceCompanyType>('life');
+  const [showAllCompanies, setShowAllCompanies] = useState(false);
+
+  const isInsurance = layer === 'insurance';
+  const quickSearches = isInsurance ? insuranceQuickSearches : hospitalQuickSearches;
+  const companyDirectory = useMemo(
+    () => filterInsuranceCompanies('', directoryType),
+    [directoryType]
+  );
+  const visibleCompanies = showAllCompanies ? companyDirectory : companyDirectory.slice(0, 8);
 
   const findMyLocation = useCallback(async () => {
     const permissionTimer = setTimeout(() => {
@@ -125,6 +144,16 @@ export default function HospitalScreen() {
     setActiveQuery(next);
   };
 
+  const changeLayer = (nextLayer: MapLayer) => {
+    if (nextLayer === layer) return;
+    setLayer(nextLayer);
+    setQuery('');
+    setActiveQuery('');
+    setPlaces([]);
+    setSelected(undefined);
+    setFailedImageId(undefined);
+  };
+
   const callSelected = async () => {
     const url = phoneLink(selected?.phone);
     if (url) await Linking.openURL(url);
@@ -133,19 +162,24 @@ export default function HospitalScreen() {
   return (
     <Page contentStyle={styles.page}>
       <View style={styles.header}>
-        <Eyebrow>가까운 병원</Eyebrow>
-        <Title>어디로 가야 할지{`\n`}지도에서 바로 봐요.</Title>
-        <Text style={styles.copy}>진료과를 먼저 맞추고, 가까운 순서로 보여드려요.</Text>
+        <Eyebrow>{isInsurance ? '보험사 찾기' : '가까운 병원'}</Eyebrow>
+        <Title>{isInsurance ? <>보험사 위치와 연락처를{`\n`}한 번에 찾아요.</> : <>어디로 가야 할지{`\n`}지도에서 바로 봐요.</>}</Title>
+        <Text style={styles.copy}>{isInsurance ? '가까운 지점과 공식 고객센터 번호를 같이 보여드려요.' : '진료과를 먼저 맞추고, 가까운 순서로 보여드려요.'}</Text>
+      </View>
+
+      <View style={styles.layerSwitch} accessibilityRole="tablist">
+        <LayerButton label="병원 찾기" active={!isInsurance} onPress={() => changeLayer('hospital')} />
+        <LayerButton label="보험사 찾기" active={isInsurance} onPress={() => changeLayer('insurance')} />
       </View>
 
       <View style={styles.searchArea}>
         <View style={styles.searchBar}>
           <Text style={styles.searchIcon}>⌕</Text>
           <TextInput
-            accessibilityLabel="진료과나 병원 이름"
+            accessibilityLabel={isInsurance ? '보험사 이름' : '진료과나 병원 이름'}
             autoCapitalize="none"
             enterKeyHint="search"
-            placeholder="예: 내과, 정형외과, 병원 이름"
+            placeholder={isInsurance ? '예: 삼성화재, 교보생명' : '예: 내과, 정형외과, 병원 이름'}
             placeholderTextColor={palette.muted}
             value={query}
             onChangeText={setQuery}
@@ -229,6 +263,7 @@ export default function HospitalScreen() {
           <HospitalMap
             latitude={location.latitude}
             longitude={location.longitude}
+            layer={layer}
             query={activeQuery}
             selectedId={selected?.id}
             onResults={receiveResults}
@@ -240,19 +275,19 @@ export default function HospitalScreen() {
         </View>
         <Text style={styles.sourceText}>
           {mapStatus === 'kakao'
-            ? '카카오맵 장소 정보 · 사진과 진료시간은 병원 상세에서 최신 내용을 확인해요.'
+            ? `카카오맵 장소 정보 · ${isInsurance ? '지점 운영시간과 전화번호' : '사진과 진료시간'}은 상세에서 최신 내용을 확인해요.`
             : mapStatus === 'open'
-              ? 'OpenStreetMap 공개 정보 · 병원에서 올린 정보와 다를 수 있어 전화 확인이 필요해요.'
+              ? `OpenStreetMap 공개 정보 · ${isInsurance ? '지점 위치는 보험사 공식 홈페이지에서도 확인해 주세요.' : '병원에서 올린 정보와 다를 수 있어 전화 확인이 필요해요.'}`
               : mapStatus === 'error'
-                ? '지도를 불러오지 못했어요. 공식 건강지도에서 다시 확인할 수 있어요.'
-                : '지도와 병원 정보를 불러오는 중이에요.'}
+                ? isInsurance ? '지도를 불러오지 못했어요. 아래 공식 고객센터는 바로 이용할 수 있어요.' : '지도를 불러오지 못했어요. 공식 건강지도에서 다시 확인할 수 있어요.'
+                : `지도와 ${isInsurance ? '보험사' : '병원'} 정보를 불러오는 중이에요.`}
         </Text>
         <Text style={styles.privacyText}>주변 검색을 위해 지도 제공사에 지도 중심 좌표를 보내며, 앱 서버에는 위치를 저장하지 않아요.</Text>
       </View>
 
       {places.length ? (
         <View style={styles.resultsSection}>
-          <SectionHeader title={`${activeQuery || '가까운 병원'} ${places.length}곳`} description="목록을 누르면 지도와 상세정보가 함께 움직여요." />
+          <SectionHeader title={`${activeQuery || (isInsurance ? '가까운 보험사' : '가까운 병원')} ${places.length}곳`} description="목록을 누르면 지도와 상세정보가 함께 움직여요." />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.resultRow}>
             {places.map((place) => (
               <Pressable
@@ -296,10 +331,10 @@ export default function HospitalScreen() {
               accessibilityRole="link"
               onPress={() => void openTrustedUrl(selected.placeUrl)}
               style={({ pressed }) => [styles.photoFallback, pressed && styles.pressed]}>
-              <View style={styles.photoSymbol}><Text style={styles.photoSymbolText}>＋</Text></View>
+              <View style={[styles.photoSymbol, isInsurance && styles.insuranceSymbol]}><Text style={[styles.photoSymbolText, isInsurance && styles.insuranceSymbolText]}>{isInsurance ? '보험' : '＋'}</Text></View>
               <View style={styles.photoCopy}>
-                <Text style={styles.photoTitle}>병원 사진 보기</Text>
-                <Text style={styles.photoDetail}>인터넷에 공개된 사진을 상세정보에서 확인해요</Text>
+                <Text style={styles.photoTitle}>{isInsurance ? '지점 위치 자세히 보기' : '병원 사진 보기'}</Text>
+                <Text style={styles.photoDetail}>{isInsurance ? '지도에 공개된 지점 정보를 확인해요' : '인터넷에 공개된 사진을 상세정보에서 확인해요'}</Text>
               </View>
               <Text style={styles.chevron}>›</Text>
             </Pressable>
@@ -307,42 +342,66 @@ export default function HospitalScreen() {
 
           <Surface style={styles.infoSurface}>
             <InfoLine label="주소" value={selected.address} />
-            <InfoLine label="전화" value={selected.phone || '등록된 전화번호가 없어요'} />
-            <InfoLine label="진료시간" value={readableOpeningHours(selected.openingHours)} last />
+            <InfoLine label={isInsurance ? '고객센터' : '전화'} value={selected.phone || '등록된 전화번호가 없어요'} />
+            <InfoLine label={isInsurance ? '상담시간' : '진료시간'} value={isInsurance ? (selected.openingHours?.replace(/;/g, ' · ') || '상담시간은 공식 홈페이지에서 확인해요') : readableOpeningHours(selected.openingHours)} last />
           </Surface>
 
           <View style={styles.actionGrid}>
             <HospitalAction label="전화하기" disabled={!selected.phone} onPress={() => void callSelected()} />
             <HospitalAction label="길찾기" onPress={() => void openTrustedUrl(kakaoDirectionsUrl(selected))} />
             <HospitalAction label="로드뷰" onPress={() => void openTrustedUrl(kakaoRoadviewUrl(selected))} />
-            <HospitalAction label="사진·시간 보기" onPress={() => void openTrustedUrl(selected.placeUrl)} />
+            <HospitalAction label={isInsurance ? '위치 상세' : '사진·시간 보기'} onPress={() => void openTrustedUrl(selected.placeUrl)} />
           </View>
           {selected.website ? (
             <Pressable accessibilityRole="link" onPress={() => void openTrustedUrl(selected.website!)} style={styles.websiteLink}>
-              <Text style={styles.websiteText}>병원 홈페이지 보기</Text>
+              <Text style={styles.websiteText}>{isInsurance ? '보험사 공식 홈페이지' : '병원 홈페이지 보기'}</Text>
               <Text style={styles.websiteArrow}>›</Text>
             </Pressable>
           ) : null}
         </View>
       ) : null}
 
-      <View style={styles.officialSection}>
-        <SectionHeader title="한 번 더 공식 정보로 확인" description="운영시간과 진료과는 바뀔 수 있어요." />
-        <Pressable
-          accessibilityRole="link"
-          onPress={() => void openOfficialService('hira-map')}
-          style={({ pressed }) => [styles.officialRow, pressed && styles.pressed]}>
-          <View style={styles.officialCopy}>
-            <Text style={styles.officialTitle}>{officialServices['hira-map'].title}</Text>
-            <Text style={styles.officialDetail}>심평원 건강지도에서 진료과와 병원 정보를 확인해요.</Text>
+      {isInsurance ? (
+        <View style={styles.directorySection}>
+          <SectionHeader title="보험사 고객센터 한눈에" description="대표번호를 누르면 바로 전화할 수 있어요." />
+          <View style={styles.directorySwitch}>
+            <DirectoryTypeButton label="생명보험" active={directoryType === 'life'} onPress={() => { setDirectoryType('life'); setShowAllCompanies(false); }} />
+            <DirectoryTypeButton label="손해보험" active={directoryType === 'non_life'} onPress={() => { setDirectoryType('non_life'); setShowAllCompanies(false); }} />
           </View>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
+          <Surface style={styles.directorySurface}>
+            {visibleCompanies.map((company, index) => (
+              <View key={company.id} style={[styles.companyRow, index < visibleCompanies.length - 1 && styles.companyBorder]}>
+                <Pressable accessibilityRole="link" onPress={() => void openTrustedUrl(company.website)} style={({ pressed }) => [styles.companyCopy, pressed && styles.pressed]}>
+                  <Text style={styles.companyName}>{company.name}</Text>
+                  <Text style={styles.companyPhone}>{company.customerCenter}</Text>
+                  {company.hours ? <Text style={styles.companyHours}>{company.hours}</Text> : null}
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={`${company.name} 고객센터 전화하기`} onPress={() => void Linking.openURL(phoneLink(company.customerCenter)!)} style={({ pressed }) => [styles.callButton, pressed && styles.pressed]}>
+                  <Text style={styles.callButtonText}>전화</Text>
+                </Pressable>
+              </View>
+            ))}
+          </Surface>
+          <Pressable accessibilityRole="button" onPress={() => setShowAllCompanies((current) => !current)} style={({ pressed }) => [styles.showAllButton, pressed && styles.pressed]}>
+            <Text style={styles.showAllText}>{showAllCompanies ? '간단히 보기' : `전체 ${companyDirectory.length}개 보험사 보기`}</Text>
+          </Pressable>
+          <Text style={styles.directoryNote}>2026년 8월 29일 공식 협회·보험사 페이지 기준이에요. 연결 전 화면에 표시된 보험사 이름을 한 번 확인해 주세요.</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.officialSection}>
+        <SectionHeader title="한 번 더 공식 정보로 확인" description={isInsurance ? '대표번호와 회사 이름은 바뀔 수 있어요.' : '운영시간과 진료과는 바뀔 수 있어요.'} />
+        {isInsurance ? (
+          <>
+            <OfficialLink title="생명보험협회 회원사 정보" detail="생명보험사 주소·홈페이지·고객센터를 확인해요." onPress={() => void openTrustedUrl(LIFE_ASSOCIATION_SOURCE)} />
+            <OfficialLink title="손해보험협회 고객센터 정보" detail="손해보험사 대표번호를 공식 목록에서 확인해요." onPress={() => void openTrustedUrl(NON_LIFE_ASSOCIATION_SOURCE)} />
+          </>
+        ) : (
+          <OfficialLink title={officialServices['hira-map'].title} detail="심평원 건강지도에서 진료과와 병원 정보를 확인해요." onPress={() => void openOfficialService('hira-map')} />
+        )}
       </View>
 
-      <Text style={styles.boundary}>
-        의료적으로 맞는 진료과를 먼저 찾고 그다음 거리를 봐요. 보험금이 많이 나온다는 이유로 병원을 추천하지 않아요.
-      </Text>
+      <Text style={styles.boundary}>{isInsurance ? '지도에 없는 지점이 있을 수 있어요. 보험 계약·청구 상담은 가입한 보험사의 공식 고객센터에서 확인해 주세요.' : '의료적으로 맞는 진료과를 먼저 찾고 그다음 거리를 봐요. 보험금이 많이 나온다는 이유로 병원을 추천하지 않아요.'}</Text>
     </Page>
   );
 }
@@ -368,10 +427,51 @@ function HospitalAction({ label, onPress, disabled = false }: { label: string; o
   );
 }
 
+function LayerButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.layerButton, active && styles.layerButtonActive, pressed && styles.pressed]}>
+      <Text style={[styles.layerButtonText, active && styles.layerButtonTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function DirectoryTypeButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.directoryTypeButton, active && styles.directoryTypeButtonActive, pressed && styles.pressed]}>
+      <Text style={[styles.directoryTypeText, active && styles.directoryTypeTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function OfficialLink({ title, detail, onPress }: { title: string; detail: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="link" onPress={onPress} style={({ pressed }) => [styles.officialRow, pressed && styles.pressed]}>
+      <View style={styles.officialCopy}>
+        <Text style={styles.officialTitle}>{title}</Text>
+        <Text style={styles.officialDetail}>{detail}</Text>
+      </View>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 0, paddingTop: space.xl },
   header: { gap: space.md, paddingHorizontal: space.xl },
   copy: { ...type.body, color: palette.muted },
+  layerSwitch: { marginHorizontal: space.xl, padding: 4, borderRadius: 18, backgroundColor: palette.infoSoft, flexDirection: 'row', gap: 4 },
+  layerButton: { flex: 1, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  layerButtonActive: { backgroundColor: palette.surface, shadowColor: '#191F28', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  layerButtonText: { ...type.bodyStrong, color: palette.muted },
+  layerButtonTextActive: { color: palette.ink },
   searchArea: { gap: space.md, paddingHorizontal: space.xl },
   searchBar: {
     minHeight: 58,
@@ -421,6 +521,8 @@ const styles = StyleSheet.create({
   photoFallback: { minHeight: 116, borderRadius: 24, backgroundColor: '#E8F3FF', padding: space.xl, flexDirection: 'row', alignItems: 'center', gap: space.lg },
   photoSymbol: { width: 52, height: 52, borderRadius: 18, backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center' },
   photoSymbolText: { color: palette.brand, fontSize: 28, fontWeight: '500' },
+  insuranceSymbol: { backgroundColor: palette.ink },
+  insuranceSymbolText: { color: palette.white, fontSize: 13, fontWeight: '700' },
   photoCopy: { flex: 1, gap: 3 },
   photoTitle: { ...type.bodyStrong, color: palette.ink },
   photoDetail: { ...type.caption, color: palette.muted },
@@ -437,6 +539,24 @@ const styles = StyleSheet.create({
   websiteLink: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
   websiteText: { ...type.bodyStrong, color: palette.ink },
   websiteArrow: { color: palette.muted, fontSize: 25 },
+  directorySection: { gap: space.lg, paddingHorizontal: space.xl },
+  directorySwitch: { flexDirection: 'row', gap: space.sm },
+  directoryTypeButton: { minHeight: 42, paddingHorizontal: 18, borderRadius: 999, backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center' },
+  directoryTypeButtonActive: { backgroundColor: palette.ink },
+  directoryTypeText: { ...type.caption, color: palette.info },
+  directoryTypeTextActive: { color: palette.white },
+  directorySurface: { paddingVertical: 0 },
+  companyRow: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 13 },
+  companyBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
+  companyCopy: { flex: 1, gap: 2 },
+  companyName: { ...type.bodyStrong, color: palette.ink },
+  companyPhone: { ...type.body, color: palette.brand },
+  companyHours: { fontSize: 11, lineHeight: 16, color: palette.muted },
+  callButton: { minWidth: 62, minHeight: 42, borderRadius: 14, backgroundColor: palette.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  callButtonText: { ...type.caption, color: palette.brand, fontWeight: '700' },
+  showAllButton: { minHeight: 52, borderRadius: 17, backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center' },
+  showAllText: { ...type.bodyStrong, color: palette.ink },
+  directoryNote: { fontSize: 11, lineHeight: 17, color: palette.muted },
   officialSection: { gap: space.lg, paddingHorizontal: space.xl },
   officialRow: { minHeight: 82, padding: space.xl, borderRadius: 22, backgroundColor: palette.surface, flexDirection: 'row', alignItems: 'center', gap: space.lg },
   officialCopy: { flex: 1, gap: 4 },
