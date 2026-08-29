@@ -32,6 +32,10 @@ npm start
 
 심평원 Open API를 로컬에서 시험하려면 `.env.example`을 참고해 `.env`에 개발키를 넣고 Expo 서버를 다시 시작합니다. `EXPO_PUBLIC_` 값은 앱 번들에 포함되므로 운영에서는 이 키를 넣지 않고 서버 프록시와 호출량 제한을 사용해야 합니다.
 
+병원 지도는 키가 없어도 OpenStreetMap 공개 데이터로 동작합니다. 카카오 장소검색·스카이뷰·화면 안 로드뷰를 사용하려면 `.env.local`에 `EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY`를 넣고 카카오 디벨로퍼스에서 `http://localhost:8081`과 배포 도메인을 JavaScript SDK 허용 도메인으로 등록하세요. 공개 클라이언트 키이므로 도메인 제한은 필수입니다.
+
+GitHub Pages에서는 저장소 Actions secret `EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY`가 있으면 카카오 지도로 자동 빌드되고, 없으면 공개 지도와 카카오 길찾기·로드뷰 바로가기를 사용합니다.
+
 ## 검증
 
 ```bash

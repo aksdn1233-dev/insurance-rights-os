@@ -117,6 +117,14 @@ Claim Radar는 보험금 액수를 확정하지 않고 `candidate`, `needs_revie
 - Jest로 순수 도메인과 상태 전이를 테스트한다.
 - 운영 단계: PostgreSQL + row-level tenancy, object vault, KMS envelope encryption, queue/outbox, OpenTelemetry를 우선 검토한다.
 
+### 병원 지도 adapter
+
+- foreground 위치 권한을 받은 뒤 지도 중심 좌표로 5km 안의 병원을 찾는다.
+- 카카오 JavaScript SDK 키와 허용 도메인이 준비되면 `HP8` 장소검색, 일반 지도, 스카이뷰, 화면 안 로드뷰를 사용한다.
+- 키가 없거나 SDK 호출이 실패하면 OpenStreetMap 타일과 Overpass 병원 데이터를 사용한다. Overpass endpoint 이중화, 10초 timeout, 위치 단위 session cache를 적용한다.
+- 전화·진료시간·사진은 provider 응답에 있는 값만 표시한다. 누락값은 생성하지 않고 카카오/OSM 장소 상세 또는 병원 홈페이지로 연결한다.
+- 길찾기와 로드뷰는 카카오 공식 deep link를 사용하며 보험금 유불리는 검색·정렬 신호로 사용하지 않는다.
+
 ## 8. 배포 단위
 
 - `mobile`: 소비자 앱

@@ -18,6 +18,7 @@ export default function PrivacyScreen() {
         <Surface>
           <DetailRow title="연습 진행 상태" detail="이 기기의 브라우저나 앱 안에만 저장해요." />
           <DetailRow title="선택한 서류" detail="내용과 실제 파일 이름을 저장하거나 전송하지 않아요." />
+          <DetailRow title="병원 주변 검색" detail="지도 제공사에 지도 중심 좌표를 보내요. 앱 서버에는 위치를 저장하지 않아요." />
           <DetailRow title="공식기관 로그인" detail="각 공식기관 화면에서만 진행해요. 이 앱은 비밀번호를 받지 않아요." last />
         </Surface>
       </View>
@@ -42,4 +43,3 @@ const styles = StyleSheet.create({
   section: { gap: space.lg },
   footnote: { ...type.caption, color: palette.muted },
 });
-
