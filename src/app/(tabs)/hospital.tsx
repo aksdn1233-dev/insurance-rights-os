@@ -25,6 +25,7 @@ import {
   MapConnectionStatus,
   phoneLink,
   readableOpeningHours,
+  searchKoreanLocation,
 } from '@/integrations/hospital-discovery';
 import { officialServices, openOfficialService } from '@/integrations/official-services';
 
@@ -47,30 +48,63 @@ export default function HospitalScreen() {
   const [selected, setSelected] = useState<HospitalPlace>();
   const [mapStatus, setMapStatus] = useState<MapConnectionStatus>('loading');
   const [location, setLocation] = useState(DEFAULT_MAP_CENTER);
-  const [locationState, setLocationState] = useState<'loading' | 'ready' | 'denied'>('loading');
+  const [locationState, setLocationState] = useState<'loading' | 'ready' | 'manual' | 'denied'>('loading');
+  const [locationLabel, setLocationLabel] = useState('서울 시청');
+  const [areaQuery, setAreaQuery] = useState('');
+  const [areaState, setAreaState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [failedImageId, setFailedImageId] = useState<string>();
 
   const findMyLocation = useCallback(async () => {
+    const permissionTimer = setTimeout(() => {
+      setLocationState((current) => current === 'loading' ? 'denied' : current);
+    }, 8000);
     try {
-      const permission = await Promise.race([
-        Location.requestForegroundPermissionsAsync(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
-      ]);
-      if (!permission) {
-        setLocationState('denied');
-        return;
-      }
+      const permission = await Location.requestForegroundPermissionsAsync();
+      clearTimeout(permissionTimer);
       if (permission.status !== Location.PermissionStatus.GRANTED) {
         setLocationState('denied');
         return;
       }
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setLocation({ latitude: current.coords.latitude, longitude: current.coords.longitude });
-      setLocationState('ready');
+      const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 300000, requiredAccuracy: 1000 });
+      if (lastKnown) {
+        setLocation({ latitude: lastKnown.coords.latitude, longitude: lastKnown.coords.longitude });
+        setLocationLabel('내 위치');
+        setLocationState('ready');
+      }
+      const positionTimer = setTimeout(() => {
+        if (!lastKnown) setLocationState('denied');
+      }, 10000);
+      try {
+        const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setLocation({ latitude: current.coords.latitude, longitude: current.coords.longitude });
+        setLocationLabel('내 위치');
+        setLocationState('ready');
+      } finally {
+        clearTimeout(positionTimer);
+      }
     } catch {
+      clearTimeout(permissionTimer);
       setLocationState('denied');
     }
   }, []);
+
+  const moveToArea = async () => {
+    if (!areaQuery.trim()) return;
+    setAreaState('loading');
+    try {
+      const result = await searchKoreanLocation(areaQuery);
+      if (!result) {
+        setAreaState('error');
+        return;
+      }
+      setLocation({ latitude: result.latitude, longitude: result.longitude });
+      setLocationLabel(result.label);
+      setLocationState('manual');
+      setAreaState('idle');
+    } catch {
+      setAreaState('error');
+    }
+  };
 
   useEffect(() => {
     const task = setTimeout(() => void findMyLocation(), 0);
@@ -142,12 +176,18 @@ export default function HospitalScreen() {
           <View style={styles.locationLine}>
             {locationState === 'loading' ? <ActivityIndicator size="small" color={palette.brand} /> : <View style={styles.locationDot} />}
             <Text style={styles.locationText}>
-              {locationState === 'ready' ? '현재 위치 주변' : locationState === 'denied' ? '서울 시청 주변 · 위치 꺼짐' : '현재 위치 확인 중'}
+              {locationState === 'ready'
+                ? '현재 위치 주변'
+                : locationState === 'manual'
+                  ? `${locationLabel} 주변 · 직접 선택`
+                  : locationState === 'denied'
+                    ? '위치 권한이 꺼져 있어요'
+                    : '현재 위치 확인 중'}
             </Text>
           </View>
-          {locationState === 'denied' ? (
+          {locationState === 'denied' || locationState === 'manual' ? (
             <TextButton
-              label="위치 다시 켜기"
+              label={locationState === 'manual' ? '내 위치로 찾기' : '위치 권한 확인'}
               onPress={() => {
                 setLocationState('loading');
                 void findMyLocation();
@@ -155,6 +195,36 @@ export default function HospitalScreen() {
             />
           ) : null}
         </View>
+        {locationState === 'denied' ? (
+          <View style={styles.locationHelp}>
+            <Text style={styles.locationHelpTitle}>동네 이름으로도 찾을 수 있어요</Text>
+            <Text style={styles.locationHelpCopy}>위치 권한이 안 켜지면 역이나 동네 이름을 써 주세요.</Text>
+            <View style={styles.areaSearchRow}>
+              <TextInput
+                accessibilityLabel="찾을 동네나 역"
+                enterKeyHint="search"
+                placeholder="예: 강남역, 해운대구"
+                placeholderTextColor={palette.muted}
+                value={areaQuery}
+                onChangeText={(value) => {
+                  setAreaQuery(value);
+                  if (areaState === 'error') setAreaState('idle');
+                }}
+                onSubmitEditing={() => void moveToArea()}
+                style={styles.areaInput}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={!areaQuery.trim() || areaState === 'loading'}
+                onPress={() => void moveToArea()}
+                style={({ pressed }) => [styles.areaButton, (!areaQuery.trim() || areaState === 'loading') && styles.actionDisabled, pressed && styles.pressed]}>
+                {areaState === 'loading' ? <ActivityIndicator size="small" color={palette.white} /> : <Text style={styles.areaButtonText}>이동</Text>}
+              </Pressable>
+            </View>
+            {areaState === 'error' ? <Text style={styles.areaError}>위치를 찾지 못했어요. 동이나 역 이름을 다시 써 주세요.</Text> : null}
+            <Text style={styles.locationPermissionTip}>내 위치를 쓰려면 브라우저의 사이트 설정에서 위치를 ‘허용’으로 바꿔 주세요.</Text>
+          </View>
+        ) : null}
         <View style={styles.mapFrame}>
           <HospitalMap
             latitude={location.latitude}
@@ -324,6 +394,15 @@ const styles = StyleSheet.create({
   locationLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   locationDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: palette.brand },
   locationText: { ...type.caption, color: palette.info },
+  locationHelp: { marginHorizontal: space.xl, padding: space.lg, gap: space.sm, borderRadius: 20, backgroundColor: palette.brandSoft },
+  locationHelpTitle: { ...type.bodyStrong, color: palette.ink },
+  locationHelpCopy: { ...type.caption, color: palette.muted },
+  areaSearchRow: { flexDirection: 'row', gap: space.sm, marginTop: 4 },
+  areaInput: { flex: 1, minWidth: 0, minHeight: 50, paddingHorizontal: 14, borderRadius: 15, backgroundColor: palette.surface, ...type.body, color: palette.ink, outlineStyle: 'none' } as any,
+  areaButton: { width: 66, minHeight: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.brand },
+  areaButtonText: { ...type.bodyStrong, color: palette.white },
+  areaError: { ...type.caption, color: palette.danger },
+  locationPermissionTip: { fontSize: 11, lineHeight: 16, color: palette.muted },
   mapFrame: { height: 390, overflow: 'hidden', backgroundColor: '#EDF1F4' },
   sourceText: { ...type.caption, color: palette.muted, paddingHorizontal: space.xl },
   privacyText: { fontSize: 11, lineHeight: 16, color: '#8B95A1', paddingHorizontal: space.xl, marginTop: -6 },

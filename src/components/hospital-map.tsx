@@ -21,6 +21,7 @@ type Props = {
 type MapEngine = {
   setMode: (mode: MapMode) => void;
   focus: (place: HospitalPlace) => void;
+  destroy: () => void;
 };
 
 const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY;
@@ -349,6 +350,9 @@ export default function HospitalMap({
         focus(place) {
           select(place);
         },
+        destroy() {
+          markers.forEach((marker) => marker.setMap(null));
+        },
       };
       setProvider('kakao');
       void onStatus('kakao');
@@ -398,6 +402,9 @@ export default function HospitalMap({
         focus(place) {
           map.flyTo([place.latitude, place.longitude], 16, { duration: 0.5 });
         },
+        destroy() {
+          map.remove();
+        },
       };
     }
 
@@ -424,6 +431,7 @@ export default function HospitalMap({
 
     return () => {
       cancelled = true;
+      engineRef.current?.destroy();
       engineRef.current = null;
       mapContainer.innerHTML = '';
       roadviewContainer.innerHTML = '';

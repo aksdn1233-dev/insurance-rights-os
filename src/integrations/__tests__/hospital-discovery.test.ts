@@ -4,6 +4,7 @@ import {
   formatDistance,
   kakaoDirectionsUrl,
   kakaoRoadviewUrl,
+  parseLocationSearchResponse,
   phoneLink,
   readableOpeningHours,
 } from '../hospital-discovery';
@@ -33,5 +34,16 @@ describe('hospital discovery presentation helpers', () => {
     expect(readableOpeningHours()).toBe('진료시간은 상세정보에서 확인해요');
     expect(readableOpeningHours('24/7')).toBe('24시간 진료');
     expect(readableOpeningHours('Mo-Fr 09:00-18:00; Sa 09:00-13:00')).toContain(' · ');
+  });
+
+  it('turns a Korean location search response into a safe map center', () => {
+    expect(parseLocationSearchResponse([{
+      lat: '37.4979',
+      lon: '127.0276',
+      display_name: '강남역, 서울특별시, 대한민국',
+      address: { suburb: '역삼동' },
+    }])).toEqual({ latitude: 37.4979, longitude: 127.0276, label: '역삼동' });
+    expect(parseLocationSearchResponse([])).toBeUndefined();
+    expect(parseLocationSearchResponse([{ lat: 'nope', lon: '127' }])).toBeUndefined();
   });
 });
