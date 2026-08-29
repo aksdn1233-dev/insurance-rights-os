@@ -6,6 +6,9 @@
 
 현재 공개 베타에서 실사용 가능한 범위는 공식 환급·보험금 조회 화면 연결과 안전한 제품 흐름 체험입니다. 실제 보험계약 자동수집, 실제 약관 판정, 보험금 청구 대행은 아직 제공하지 않습니다.
 
+- 공개 베타: https://aksdn1233-dev.github.io/insurance-rights-os/
+- GitHub: https://github.com/aksdn1233-dev/insurance-rights-os
+
 ## 실행
 
 Node.js 22.13 이상이 필요합니다.
