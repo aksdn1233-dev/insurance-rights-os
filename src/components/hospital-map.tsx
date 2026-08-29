@@ -94,6 +94,52 @@ function readableSpecialty(value?: string) {
     .join(' · ');
 }
 
+async function fetchNominatimHospitals(latitude: number, longitude: number, query: string): Promise<HospitalPlace[]> {
+  const params = new URLSearchParams({
+    q: query.trim() ? `${query.trim()} 병원` : 'hospital',
+    format: 'jsonv2',
+    countrycodes: 'kr',
+    viewbox: `${longitude - 0.07},${latitude + 0.05},${longitude + 0.07},${latitude - 0.05}`,
+    bounded: '1',
+    limit: '15',
+    namedetails: '1',
+    extratags: '1',
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`NOMINATIM_${response.status}`);
+    const payload = await response.json() as Record<string, any>[];
+    return payload.map((item) => {
+      const lat = Number(item.lat);
+      const lng = Number(item.lon);
+      const tags = (item.extratags ?? {}) as Record<string, string>;
+      const osmType = item.osm_type === 'relation' ? 'relation' : item.osm_type === 'node' ? 'node' : 'way';
+      return {
+        id: `${osmType}-${item.osm_id}`,
+        name: item.namedetails?.['name:ko'] || item.namedetails?.name || item.display_name.split(',')[0],
+        category: readableSpecialty(tags['healthcare:speciality']) || (item.type === 'hospital' ? '병원' : '의료기관'),
+        address: item.display_name,
+        phone: tags.phone || tags['contact:phone'],
+        latitude: lat,
+        longitude: lng,
+        distanceMeters: distanceBetween(latitude, longitude, lat, lng),
+        openingHours: tags.opening_hours,
+        website: tags.website || tags['contact:website'],
+        imageUrl: safeRemoteImage(tags),
+        placeUrl: `https://www.openstreetmap.org/${osmType}/${item.osm_id}`,
+        source: 'OPENSTREETMAP' as const,
+      } satisfies HospitalPlace;
+    }).sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity));
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchOpenHospitals(latitude: number, longitude: number, query: string): Promise<HospitalPlace[]> {
   const roundedLatitude = Number(latitude.toFixed(3));
   const roundedLongitude = Number(longitude.toFixed(3));
@@ -133,7 +179,13 @@ async function fetchOpenHospitals(latitude: number, longitude: number, query: st
         clearTimeout(timeout);
       }
     }
-    if (!elements) throw lastError ?? new Error('OVERPASS_UNAVAILABLE');
+    if (!elements) {
+      try {
+        return await fetchNominatimHospitals(latitude, longitude, query);
+      } catch {
+        throw lastError ?? new Error('OPEN_MAP_SEARCH_UNAVAILABLE');
+      }
+    }
   }
   const normalizedQuery = query.trim().toLocaleLowerCase('ko-KR');
 
