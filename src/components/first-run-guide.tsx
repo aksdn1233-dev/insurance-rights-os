@@ -23,7 +23,10 @@ export function FirstRunGuide() {
     <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false}>
       <SafeAreaView style={styles.safe}>
         <View style={styles.topBar}>
-          <Text style={styles.topLabel}>처음 안내</Text>
+          <View style={styles.guideBrand}>
+            <Text style={styles.topLabel}>보험의 달인</Text>
+            <Text style={styles.topHint}>처음 안내</Text>
+          </View>
           <Pressable
             accessibilityRole="button"
             onPress={closeGuide}
@@ -80,6 +83,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   topLabel: { ...type.bodyStrong, color: palette.ink },
+  topHint: { ...type.caption, color: palette.brand },
+  guideBrand: { gap: 1 },
   skip: { ...type.body, color: palette.muted, paddingVertical: space.sm },
   content: { flex: 1, paddingHorizontal: space.xl, justifyContent: 'center', gap: 36 },
   visual: { alignItems: 'center', gap: space.lg },

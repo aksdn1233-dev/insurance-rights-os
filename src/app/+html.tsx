@@ -11,9 +11,9 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#F7F8FA" />
         <meta
           name="description"
-          content="놓치기 쉬운 보험 권리를 약관 근거와 필요한 서류까지 쉽게 확인하는 서비스"
+          content="보험의 달인에서 받은 치료로 확인할 보험 혜택과 필요한 서류를 쉽게 살펴보세요."
         />
-        <title>권리찾기 · 보험을 쉽게 확인해요</title>
+        <title>보험의 달인 · 놓치기 쉬운 보험 혜택 찾기</title>
         <link rel="icon" href="./icon.svg" type="image/svg+xml" />
         <link rel="manifest" href="./manifest.json" />
         <ScrollViewStyleReset />
@@ -22,4 +22,3 @@ export default function RootHtml({ children }: PropsWithChildren) {
     </html>
   );
 }
-

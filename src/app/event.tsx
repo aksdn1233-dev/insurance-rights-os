@@ -90,7 +90,7 @@ export default function EventScreen() {
       </Surface>
 
       <Text style={styles.footnote}>
-        본 이벤트는 신세계백화점과 관계없이 권리찾기 공개 베타 운영자가 진행할 예정입니다.
+        본 이벤트는 신세계백화점과 관계없이 보험의 달인 공개 베타 운영자가 진행할 예정입니다.
       </Text>
     </Page>
   );

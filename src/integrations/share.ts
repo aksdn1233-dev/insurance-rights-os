@@ -31,13 +31,13 @@ export async function shareLink(input: ShareLinkInput): Promise<ShareResult> {
 }
 
 export const productShare = {
-  title: '내 보험 권리 찾기',
-  message: '받은 치료를 고르면 내 보험에서 확인할 내용과 필요한 서류를 쉽게 알려줘요.',
+  title: '보험의 달인',
+  message: '받은 치료를 고르면 내 보험에서 확인할 혜택과 필요한 서류를 쉽게 알려주는 보험의 달인이에요.',
   url: 'https://insurance-rights-korea.pages.dev/',
 } as const;
 
 export const eventShare = {
-  title: '권리찾기 공개 베타 이벤트',
-  message: '권리찾기를 직접 써보고 솔직한 후기와 개선점을 남겨보세요.',
+  title: '보험의 달인 공개 베타 이벤트',
+  message: '보험의 달인을 직접 써보고 솔직한 후기와 개선점을 남겨보세요.',
   url: 'https://insurance-rights-korea.pages.dev/event',
 } as const;

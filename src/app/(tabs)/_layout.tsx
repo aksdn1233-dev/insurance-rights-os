@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { Text, type ColorValue } from 'react-native';
+import { Platform, Text, type ColorValue } from 'react-native';
 
 import { palette } from '@/constants/product-theme';
 
@@ -11,6 +11,9 @@ type IconName = {
 };
 
 function TabIcon({ name, color, fallback }: { name: IconName; color: ColorValue; fallback: string }) {
+  if (Platform.OS === 'web') {
+    return <Text style={{ color, fontSize: 18, fontWeight: '700' }}>{fallback}</Text>;
+  }
   return (
     <SymbolView
       name={name}
@@ -47,7 +50,7 @@ export default function TabsLayout() {
           title: '가족',
           tabBarAccessibilityLabel: '가족 탭',
           tabBarIcon: ({ color }) => (
-            <TabIcon color={color} fallback="○" name={{ ios: 'person.2.fill', android: 'family_restroom', web: 'family_restroom' }} />
+            <TabIcon color={color} fallback="●●" name={{ ios: 'person.2.fill', android: 'family_restroom', web: 'family_restroom' }} />
           ),
         }}
       />
@@ -57,7 +60,7 @@ export default function TabsLayout() {
           title: '병원',
           tabBarAccessibilityLabel: '병원 탭',
           tabBarIcon: ({ color }) => (
-            <TabIcon color={color} fallback="＋" name={{ ios: 'cross.case.fill', android: 'local_hospital', web: 'local_hospital' }} />
+            <TabIcon color={color} fallback="+" name={{ ios: 'cross.case.fill', android: 'local_hospital', web: 'local_hospital' }} />
           ),
         }}
       />
@@ -69,7 +72,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <TabIcon
               color={color}
-              fallback="◇"
+              fallback="✓"
               name={{ ios: 'shield.lefthalf.filled', android: 'health_and_safety', web: 'health_and_safety' }}
             />
           ),

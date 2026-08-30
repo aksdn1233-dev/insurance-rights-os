@@ -35,11 +35,15 @@ export default function HomeScreen() {
   return (
     <Page loading={!app.hydrated}>
       <TestDataBanner />
+      <View style={styles.brandIntro} accessibilityLabel="보험의 달인, 놓치기 쉬운 보험 혜택을 쉽게 찾아요">
+        <Text style={styles.brandName}>보험의 달인</Text>
+        <Text style={styles.brandPromise}>놓치기 쉬운 보험 혜택을 쉽게 찾아요</Text>
+      </View>
       <View style={styles.hero}>
-        <Eyebrow>보험 쉽게 확인하기</Eyebrow>
+        <Eyebrow>치료 선택 · 혜택 확인 · 서류 준비</Eyebrow>
         <Title>병원에 다녀오셨나요?</Title>
         <Text style={styles.heroCopy}>
-          어떤 치료를 받았는지만 알려주세요.{`\n`}내 보험에서 확인할 내용을 찾아드려요.
+          받은 치료를 알려주세요.{`\n`}내 보험에서 확인할 혜택과 필요한 서류를 찾아드려요.
         </Text>
       </View>
 
@@ -97,7 +101,7 @@ export default function HomeScreen() {
             <Text style={styles.communityTitle}>한 번 눌러 바로 공유해요</Text>
             <Text style={styles.communityDescription}>휴대폰에서는 카카오톡이나 문자 같은 공유 앱이 바로 열려요.</Text>
           </View>
-          <ShareAction content={productShare} label="권리찾기 공유하기" />
+          <ShareAction content={productShare} label="보험의 달인 공유하기" />
           <PrimaryButton
             label="후기·개선점 보내기"
             onPress={() => router.push({ pathname: '/feedback', params: { from: 'home' } })}
@@ -133,6 +137,14 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  brandIntro: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
+    paddingBottom: space.xl,
+    gap: 4,
+  },
+  brandName: { fontSize: 30, lineHeight: 38, fontWeight: '800', color: palette.ink, letterSpacing: -1 },
+  brandPromise: { ...type.body, color: palette.brand },
   hero: { gap: space.md },
   heroCopy: { ...type.body, color: palette.muted, maxWidth: 520 },
   primarySurface: { gap: space.lg, paddingVertical: 24 },

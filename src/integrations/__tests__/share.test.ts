@@ -11,7 +11,7 @@ describe('share link', () => {
     await expect(shareLink(productShare)).resolves.toBe('shared');
     expect(share).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: '내 보험 권리 찾기',
+        title: '보험의 달인',
         url: 'https://insurance-rights-korea.pages.dev/',
       }),
     );

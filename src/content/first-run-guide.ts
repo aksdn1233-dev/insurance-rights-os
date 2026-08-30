@@ -1,8 +1,8 @@
 export const firstRunGuideSlides = [
   {
     tab: '홈',
-    title: '병원에 다녀온 뒤\n여기에서 시작해요.',
-    description: '받은 치료를 고르면 내 보험에서 확인할 내용을 찾아드려요.',
+    title: '놓치기 쉬운 보험 혜택,\n보험의 달인이 찾아봐요.',
+    description: '받은 치료를 고르면 내 보험에서 확인할 혜택과 필요한 서류를 쉽게 알려드려요.',
     hint: '어려운 병 이름은 몰라도 괜찮아요.',
   },
   {
