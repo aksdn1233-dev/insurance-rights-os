@@ -15,14 +15,17 @@ import type {
 } from '@/domain/types';
 import { parseStoredDemoState } from '@/state/stored-demo-state';
 import type { DemoState } from '@/state/stored-demo-state';
+import { betaEvent } from '@/content/beta-event';
 
 export type { DemoState, DemoStage } from '@/state/stored-demo-state';
 
 type AppStateValue = DemoState & {
   hydrated: boolean;
   guideSeen: boolean;
+  eventNoticeSeen: boolean;
   completeFirstRunGuide: () => void;
   restartFirstRunGuide: () => void;
+  dismissEventNotice: () => void;
   registerFixturePolicy: () => void;
   recordFixtureEvent: () => void;
   showEvidence: () => void;
@@ -59,13 +62,19 @@ export function AppStateProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<DemoState>(initialState);
   const [hydrated, setHydrated] = useState(false);
   const [guideSeen, setGuideSeen] = useState(false);
+  const [eventNoticeSeen, setEventNoticeSeen] = useState(false);
 
   useEffect(() => {
-    Promise.all([AsyncStorage.getItem(STORAGE_KEY), AsyncStorage.getItem(GUIDE_STORAGE_KEY)])
-      .then(([storedState, storedGuide]) => {
+    Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY),
+      AsyncStorage.getItem(GUIDE_STORAGE_KEY),
+      AsyncStorage.getItem(betaEvent.noticeStorageKey),
+    ])
+      .then(([storedState, storedGuide, storedEventNotice]) => {
         const parsedState = parseStoredDemoState(storedState);
         if (parsedState) setState(parsedState);
         setGuideSeen(storedGuide === 'true');
+        setEventNoticeSeen(storedEventNotice === 'true');
       })
       .finally(() => setHydrated(true));
   }, []);
@@ -82,6 +91,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       ...state,
       hydrated,
       guideSeen,
+      eventNoticeSeen,
       completeFirstRunGuide: () => {
         setGuideSeen(true);
         AsyncStorage.setItem(GUIDE_STORAGE_KEY, 'true').catch(() => undefined);
@@ -89,6 +99,10 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       restartFirstRunGuide: () => {
         setGuideSeen(false);
         AsyncStorage.setItem(GUIDE_STORAGE_KEY, 'false').catch(() => undefined);
+      },
+      dismissEventNotice: () => {
+        setEventNoticeSeen(true);
+        AsyncStorage.setItem(betaEvent.noticeStorageKey, 'true').catch(() => undefined);
       },
       registerFixturePolicy: () =>
         setState((current) => ({
@@ -197,7 +211,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         AsyncStorage.removeItem(STORAGE_KEY).catch(() => undefined);
       },
     }),
-    [guideSeen, hydrated, state],
+    [eventNoticeSeen, guideSeen, hydrated, state],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

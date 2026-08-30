@@ -24,6 +24,17 @@ export default function PrivacyScreen() {
       </View>
 
       <View style={styles.section}>
+        <SectionHeader title="이벤트 참여 정보" />
+        <Surface>
+          <DetailRow
+            title="아직 참여 정보를 받지 않아요"
+            detail="주최자·문의처·보관 기간을 먼저 공개한 뒤 접수를 열어요."
+            last
+          />
+        </Surface>
+      </View>
+
+      <View style={styles.section}>
         <SectionHeader title="꼭 알아두세요" />
         <Surface>
           <DetailRow title="보험금 지급을 정하지 않아요" detail="화면의 결과는 확인 후보이며 보험사가 최종 결정해요." />

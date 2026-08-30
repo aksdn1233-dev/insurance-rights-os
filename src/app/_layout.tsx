@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { palette } from '@/constants/product-theme';
 import { FirstRunGuide } from '@/components/first-run-guide';
+import { BetaEventNotice } from '@/components/beta-event-notice';
 import { AppStateProvider } from '@/state/app-state';
 
 export const unstable_settings = { initialRouteName: '(tabs)' };
@@ -51,8 +52,13 @@ export default function RootLayout() {
           name="privacy"
           options={{ title: '개인정보·이용 안내', presentation: 'modal', headerBackTitle: '내 보험' }}
         />
+        <Stack.Screen
+          name="event"
+          options={{ title: '공개 베타 이벤트', presentation: 'modal', headerBackTitle: '홈' }}
+        />
       </Stack>
       <FirstRunGuide />
+      <BetaEventNotice />
     </AppStateProvider>
   );
 }

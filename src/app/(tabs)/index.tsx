@@ -73,6 +73,21 @@ export default function HomeScreen() {
         </Surface>
       </Pressable>
 
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="공개 베타 후기 이벤트 자세히 보기"
+        onPress={() => router.push('/event')}
+        style={({ pressed }) => pressed && styles.pressed}>
+        <Surface style={styles.eventSurface}>
+          <View style={styles.eventCopy}>
+            <Text style={styles.eventEyebrow}>공개 베타 이벤트 · 사전 안내</Text>
+            <Text style={styles.eventTitle}>써본 이야기를 들려주세요</Text>
+            <Text style={styles.eventDescription}>추첨 1명 · 신세계백화점 상품권 100만원 상당</Text>
+          </View>
+          <Text style={styles.refundArrow}>›</Text>
+        </Surface>
+      </Pressable>
+
       <View style={styles.section}>
         <SectionHeader title="내가 할 일" description="지금 확인하면 좋은 것만 모았어요." />
         <Surface>
@@ -118,4 +133,9 @@ const styles = StyleSheet.create({
   refundTitle: { ...type.title2, color: palette.ink },
   refundDescription: { ...type.caption, color: palette.muted },
   refundArrow: { fontSize: 30, lineHeight: 32, color: palette.brand },
+  eventSurface: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
+  eventCopy: { flex: 1, gap: 5 },
+  eventEyebrow: { ...type.caption, color: palette.brand },
+  eventTitle: { ...type.title2, color: palette.ink },
+  eventDescription: { ...type.caption, color: palette.muted },
 });
