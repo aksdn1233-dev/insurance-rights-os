@@ -56,6 +56,10 @@ export default function RootLayout() {
           name="event"
           options={{ title: '공개 베타 이벤트', presentation: 'modal', headerBackTitle: '홈' }}
         />
+        <Stack.Screen
+          name="feedback"
+          options={{ title: '후기·개선점 보내기', presentation: 'modal', headerBackTitle: '홈' }}
+        />
       </Stack>
       <FirstRunGuide />
       <BetaEventNotice />

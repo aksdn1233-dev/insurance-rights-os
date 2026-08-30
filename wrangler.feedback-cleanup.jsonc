@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "insurance-rights-feedback-cleanup",
+  "main": "./workers/feedback-cleanup.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 }
+  },
+  "triggers": {
+    "crons": ["0 18 * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "FEEDBACK_DB",
+      "database_name": "insurance-rights-feedback",
+      "database_id": "f2f59e5c-8955-4d7f-a1a3-bcec432eb10c",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

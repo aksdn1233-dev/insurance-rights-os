@@ -12,8 +12,10 @@ import {
   TestDataBanner,
   Title,
 } from '@/components/product-ui';
+import { ShareAction } from '@/components/share-action';
 import { palette, space, type } from '@/constants/product-theme';
 import { useAppState } from '@/state/app-state';
+import { productShare } from '@/integrations/share';
 
 const stageLabels = {
   contract: '연습용 보험을 불러와요',
@@ -89,6 +91,21 @@ export default function HomeScreen() {
       </Pressable>
 
       <View style={styles.section}>
+        <SectionHeader title="함께 더 쉽게 만들어요" description="친구에게 알려주거나, 불편한 점을 익명으로 보내주세요." />
+        <Surface style={styles.communitySurface}>
+          <View style={styles.communityCopy}>
+            <Text style={styles.communityTitle}>한 번 눌러 바로 공유해요</Text>
+            <Text style={styles.communityDescription}>휴대폰에서는 카카오톡이나 문자 같은 공유 앱이 바로 열려요.</Text>
+          </View>
+          <ShareAction content={productShare} label="권리찾기 공유하기" />
+          <PrimaryButton
+            label="후기·개선점 보내기"
+            onPress={() => router.push({ pathname: '/feedback', params: { from: 'home' } })}
+          />
+        </Surface>
+      </View>
+
+      <View style={styles.section}>
         <SectionHeader title="내가 할 일" description="지금 확인하면 좋은 것만 모았어요." />
         <Surface>
           <DetailRow
@@ -138,4 +155,8 @@ const styles = StyleSheet.create({
   eventEyebrow: { ...type.caption, color: palette.brand },
   eventTitle: { ...type.title2, color: palette.ink },
   eventDescription: { ...type.caption, color: palette.muted },
+  communitySurface: { gap: space.lg },
+  communityCopy: { gap: 5 },
+  communityTitle: { ...type.title2, color: palette.ink },
+  communityDescription: { ...type.body, color: palette.muted },
 });

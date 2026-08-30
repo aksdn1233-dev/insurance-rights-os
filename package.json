@@ -6,6 +6,7 @@
     "@expo/ui": "~57.0.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.18",
+    "expo-clipboard": "~57.0.1",
     "expo-constants": "~57.0.16",
     "expo-device": "~57.0.1",
     "expo-document-picker": "~57.0.1",
@@ -50,11 +51,14 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p workers/tsconfig.json",
+    "types:cloudflare": "wrangler types --config=wrangler.feedback-api.jsonc --path='./workers/types.d.ts'",
     "test": "jest --runInBand",
     "test:phase0": "npm run typecheck && npm test && npm run lint",
     "build:web": "expo export --platform web --output-dir dist",
-    "deploy:cloudflare": "npm run build:web && wrangler pages deploy dist --project-name=insurance-rights-korea --branch=main"
+    "deploy:cloudflare": "npm run build:web && wrangler pages deploy dist --project-name=insurance-rights-korea --branch=main",
+    "deploy:feedback-api": "wrangler deploy --config=wrangler.feedback-api.jsonc",
+    "deploy:feedback-cleanup": "wrangler deploy --config=wrangler.feedback-cleanup.jsonc"
   },
   "private": true,
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"

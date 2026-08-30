@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import {
   DetailRow,
@@ -10,10 +11,13 @@ import {
   Surface,
   Title,
 } from '@/components/product-ui';
+import { ShareAction } from '@/components/share-action';
 import { betaEvent, betaEventEntryRules, betaEventSafetyNotes } from '@/content/beta-event';
 import { palette, space, type } from '@/constants/product-theme';
+import { eventShare } from '@/integrations/share';
 
 export default function EventScreen() {
+  const router = useRouter();
   return (
     <Page>
       <View style={styles.header}>
@@ -65,6 +69,18 @@ export default function EventScreen() {
         </Surface>
       </View>
 
+      <View style={styles.section}>
+        <SectionHeader title="써보고 바로 알려주세요" description="이 화면에서 공유하고, 후기나 개선점을 익명으로 보낼 수 있어요." />
+        <Surface style={styles.actions}>
+          <PrimaryButton
+            label="후기·개선점 보내기"
+            onPress={() => router.push({ pathname: '/feedback', params: { from: 'event' } })}
+          />
+          <ShareAction content={eventShare} label="이벤트 공유하기" />
+          <Text style={styles.actionNotice}>지금 보내는 의견은 제품 개선용이며, 이벤트 응모 접수는 아직 아니에요.</Text>
+        </Surface>
+      </View>
+
       <Surface style={styles.preparing}>
         <Text style={styles.preparingTitle}>참여 접수를 준비하고 있어요</Text>
         <Text style={styles.preparingCopy}>
@@ -96,4 +112,6 @@ const styles = StyleSheet.create({
   preparingTitle: { ...type.title2, color: palette.ink },
   preparingCopy: { ...type.body, color: palette.muted },
   footnote: { ...type.caption, color: palette.muted },
+  actions: { gap: space.lg },
+  actionNotice: { ...type.caption, color: palette.muted, textAlign: 'center' },
 });

@@ -24,11 +24,23 @@ export default function PrivacyScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="이벤트 참여 정보" />
+        <SectionHeader title="익명 후기·개선점" />
         <Surface>
           <DetailRow
-            title="아직 참여 정보를 받지 않아요"
-            detail="주최자·문의처·보관 기간을 먼저 공개한 뒤 접수를 열어요."
+            title="저장하는 내용"
+            detail="선택한 의견 종류, 작성한 글, 작성한 화면 경로와 시각을 저장해요."
+          />
+          <DetailRow
+            title="저장하지 않는 내용"
+            detail="IP, 기기정보, 위치, 이름과 연락처를 따로 저장하지 않아요."
+          />
+          <DetailRow
+            title="보관 장소와 기간"
+            detail="Cloudflare APAC 서버에 암호화해 보관하고 90일이 지나면 매일 자동으로 지워요."
+          />
+          <DetailRow
+            title="민감한 정보는 쓰지 마세요"
+            detail="보험번호와 진료 내용은 의견창에 적지 않도록 안내하고, 전화번호·이메일·주민등록번호 형태는 전송 전에 막아요."
             last
           />
         </Surface>

@@ -12,7 +12,7 @@ export function BetaEventNotice() {
   const pathname = usePathname();
   const { hydrated, guideSeen, eventNoticeSeen, dismissEventNotice } = useAppState();
 
-  if (!hydrated || !guideSeen || eventNoticeSeen || pathname === '/event') return null;
+  if (!hydrated || !guideSeen || eventNoticeSeen || pathname !== '/') return null;
 
   const openDetails = () => {
     dismissEventNotice();
