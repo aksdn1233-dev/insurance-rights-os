@@ -17,6 +17,18 @@ export default function RootLayout() {
           name="description"
           content="놓치기 쉬운 보험 권리를 약관 근거와 필요한 서류까지 쉽게 확인하는 서비스"
         />
+        <link rel="canonical" href="https://insurance-rights-korea.pages.dev/" />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="내 보험 권리 찾기" />
+        <meta
+          property="og:description"
+          content="받은 치료를 고르면 확인할 보험 후보와 근거, 필요한 서류를 쉽게 알려드려요."
+        />
+        <meta property="og:url" content="https://insurance-rights-korea.pages.dev/" />
+        <meta
+          property="og:image"
+          content="https://insurance-rights-korea.pages.dev/insurance-rights-launch-4x5.png"
+        />
       </Head>
       <StatusBar style="dark" />
       <Stack

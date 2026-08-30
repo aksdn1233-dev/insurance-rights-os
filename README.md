@@ -6,7 +6,8 @@
 
 현재 공개 베타에서 실사용 가능한 범위는 공식 환급·보험금 조회 화면 연결과 안전한 제품 흐름 체험입니다. 실제 보험계약 자동수집, 실제 약관 판정, 보험금 청구 대행은 아직 제공하지 않습니다.
 
-- 공개 베타: https://aksdn1233-dev.github.io/insurance-rights-os/
+- 공개 베타(기본): https://insurance-rights-korea.pages.dev/
+- GitHub Pages 예비 주소: https://aksdn1233-dev.github.io/insurance-rights-os/
 - GitHub: https://github.com/aksdn1233-dev/insurance-rights-os
 
 ## 실행
@@ -47,6 +48,12 @@ npx expo export --platform web
 ```
 
 `test:phase0`는 TypeScript, 도메인/vertical-slice 테스트, lint를 순서대로 실행합니다.
+
+Cloudflare Pages 기본 배포는 프로젝트 루트에서 다음 명령으로 갱신합니다.
+
+```bash
+npm run deploy:cloudflare
+```
 
 배포용 web build는 GitHub Pages 하위 경로를 포함해 생성합니다.
 
