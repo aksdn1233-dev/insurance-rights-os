@@ -80,6 +80,9 @@ export default function HospitalScreen() {
     setLocation(position);
     setLocationLabel('내 위치');
     setLocationState('ready');
+    setPlaces([]);
+    setSelected(undefined);
+    setMapStatus('loading');
   }, []);
 
   const loadGrantedLocation = useCallback(async () => {
@@ -170,6 +173,9 @@ export default function HospitalScreen() {
       setLocation({ latitude: result.latitude, longitude: result.longitude });
       setLocationLabel(result.label);
       setLocationState('manual');
+      setPlaces([]);
+      setSelected(undefined);
+      setMapStatus('loading');
       setAreaState('idle');
     } catch {
       setAreaState('error');
@@ -179,6 +185,19 @@ export default function HospitalScreen() {
   useEffect(() => {
     const task = setTimeout(() => void checkLocationPermission(), 0);
     return () => clearTimeout(task);
+  }, [checkLocationPermission]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof document === 'undefined') return;
+    const refreshPermission = () => {
+      if (document.visibilityState !== 'hidden') void checkLocationPermission();
+    };
+    window.addEventListener('focus', refreshPermission);
+    document.addEventListener('visibilitychange', refreshPermission);
+    return () => {
+      window.removeEventListener('focus', refreshPermission);
+      document.removeEventListener('visibilitychange', refreshPermission);
+    };
   }, [checkLocationPermission]);
 
   const receiveResults = useCallback(async (nextPlaces: HospitalPlace[]) => {
@@ -280,27 +299,36 @@ export default function HospitalScreen() {
           </View>
           {locationState === 'prompt' || locationState === 'denied' || locationState === 'unavailable' || locationState === 'manual' ? (
             <TextButton
-              label={locationState === 'prompt' ? '내 위치 사용' : locationState === 'unavailable' ? '다시 시도' : locationState === 'manual' ? '내 위치로 찾기' : Platform.OS === 'web' ? '다시 확인' : '설정 열기'}
+              label={locationState === 'prompt' ? '내 위치 사용' : locationState === 'unavailable' ? '다시 시도' : locationState === 'manual' ? '내 위치로 찾기' : Platform.OS === 'web' ? '권한 다시 확인' : '설정 열기'}
               onPress={() => {
                 if (locationState === 'denied' && Platform.OS !== 'web') void Linking.openSettings();
+                else if (locationState === 'denied') void checkLocationPermission();
                 else void requestMyLocation();
               }}
             />
           ) : null}
         </View>
-        {locationState === 'prompt' || locationState === 'denied' || locationState === 'unavailable' ? (
+        {locationState === 'prompt' || locationState === 'denied' || locationState === 'unavailable' || locationState === 'manual' ? (
           <View style={styles.locationHelp}>
             <Text style={styles.locationHelpTitle}>
-              {locationState === 'prompt' ? '내 위치를 쓰면 가까운 순서로 보여드려요' : '동네 이름으로도 찾을 수 있어요'}
+              {locationState === 'prompt'
+                ? '내 위치를 쓰면 가까운 순서로 보여드려요'
+                : locationState === 'manual'
+                  ? '다른 주소도 바로 찾을 수 있어요'
+                  : '주소나 동네로 바로 찾을 수 있어요'}
             </Text>
             <Text style={styles.locationHelpCopy}>
-              {locationState === 'prompt' ? '‘내 위치 사용’을 누르면 위치 권한을 물어봐요.' : locationState === 'denied' ? '권한을 다시 허용하거나 역·동네 이름을 써 주세요.' : 'GPS가 늦으면 역이나 동네 이름으로 바로 찾을 수 있어요.'}
+              {locationState === 'prompt'
+                ? '‘내 위치 사용’을 누르면 위치 권한을 물어봐요.'
+                : locationState === 'denied'
+                  ? '위치 권한을 허용하거나 도로명과 건물번호를 써 주세요.'
+                  : '도로명과 건물번호, 역 또는 동네 이름을 써 주세요.'}
             </Text>
             <View style={styles.areaSearchRow}>
               <TextInput
-                accessibilityLabel="찾을 동네나 역"
+                accessibilityLabel="찾을 주소, 동네 또는 역"
                 enterKeyHint="search"
-                placeholder="예: 강남역, 해운대구"
+                placeholder="예: 테헤란로 152, 강남역"
                 placeholderTextColor={palette.muted}
                 value={areaQuery}
                 onChangeText={(value) => {
@@ -318,13 +346,13 @@ export default function HospitalScreen() {
                 {areaState === 'loading' ? <ActivityIndicator size="small" color={palette.white} /> : <Text style={styles.areaButtonText}>이동</Text>}
               </Pressable>
             </View>
-            {areaState === 'error' ? <Text style={styles.areaError}>위치를 찾지 못했어요. 동이나 역 이름을 다시 써 주세요.</Text> : null}
+            {areaState === 'error' ? <Text style={styles.areaError}>주소를 찾지 못했어요. 시·군·구와 도로명, 건물번호를 함께 써 주세요.</Text> : null}
             <Text style={styles.locationPermissionTip}>
               {locationState === 'denied'
                 ? Platform.OS === 'web'
-                  ? '브라우저 주소창의 사이트 설정에서 위치를 ‘허용’으로 바꾼 뒤 ‘다시 확인’을 눌러 주세요.'
+                  ? '주소창의 사이트 설정 → 위치 → 허용으로 바꿔 주세요. 이 화면으로 돌아오면 자동으로 다시 확인해요.'
                   : '휴대폰 설정에서 이 앱의 위치 권한을 ‘앱을 사용하는 동안’으로 바꿔 주세요.'
-                : '위치는 주변 검색에만 쓰고 앱 서버에는 저장하지 않아요.'}
+                : '주소와 위치는 주변 검색에만 쓰고 앱 서버에는 저장하지 않아요.'}
             </Text>
           </View>
         ) : null}

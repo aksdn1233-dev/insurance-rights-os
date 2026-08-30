@@ -5,6 +5,7 @@ import {
   kakaoDirectionsUrl,
   kakaoRoadviewUrl,
   parseLocationSearchResponse,
+  parsePhotonLocationSearchResponse,
   phoneLink,
   readableOpeningHours,
 } from '../hospital-discovery';
@@ -42,8 +43,34 @@ describe('hospital discovery presentation helpers', () => {
       lon: '127.0276',
       display_name: '강남역, 서울특별시, 대한민국',
       address: { suburb: '역삼동' },
-    }])).toEqual({ latitude: 37.4979, longitude: 127.0276, label: '역삼동' });
+    }])).toEqual({ latitude: 37.4979, longitude: 127.0276, label: '역삼동', precision: 'area' });
     expect(parseLocationSearchResponse([])).toBeUndefined();
     expect(parseLocationSearchResponse([{ lat: 'nope', lon: '127' }])).toBeUndefined();
+  });
+
+  it('prefers an exact road-name building number over a street-only result', () => {
+    expect(parseLocationSearchResponse([
+      { lat: '35.17', lon: '129.12', address: { road: '센텀중앙로' } },
+      { lat: '35.1751', lon: '129.1248', address: { road: '센텀중앙로', house_number: '97' } },
+    ], '부산 해운대구 센텀중앙로 97')).toEqual({
+      latitude: 35.1751,
+      longitude: 129.1248,
+      label: '센텀중앙로 97',
+      precision: 'address',
+    });
+  });
+
+  it('reads an exact Korean road address from the fallback geocoder', () => {
+    expect(parsePhotonLocationSearchResponse({
+      features: [{
+        properties: { countrycode: 'KR', street: '센텀중앙로', housenumber: '97', city: '부산광역시' },
+        geometry: { coordinates: [129.1248645, 35.1751536] },
+      }],
+    }, '부산 해운대구 센텀중앙로 97')).toEqual({
+      latitude: 35.1751536,
+      longitude: 129.1248645,
+      label: '센텀중앙로 97',
+      precision: 'address',
+    });
   });
 });
