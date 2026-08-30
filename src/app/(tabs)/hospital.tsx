@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import {
 import HospitalMap from '@/components/hospital-map';
 import { Eyebrow, Page, SectionHeader, StatusPill, Surface, TextButton, Title } from '@/components/product-ui';
 import { palette, space, type } from '@/constants/product-theme';
+import { getWebPosition, isPermissionDeniedError, SimplePosition, withTimeout } from '@/integrations/device-location';
 import {
   filterInsuranceCompanies,
   InsuranceCompanyType,
@@ -38,6 +40,7 @@ import { officialServices, openOfficialService } from '@/integrations/official-s
 
 const hospitalQuickSearches = ['내과', '소아청소년과', '정형외과', '산부인과'];
 const insuranceQuickSearches = ['삼성', '현대', 'DB', 'KB'];
+type LocationState = 'checking' | 'prompt' | 'requesting' | 'ready' | 'manual' | 'denied' | 'unavailable';
 
 async function openTrustedUrl(url: string) {
   try {
@@ -57,7 +60,7 @@ export default function HospitalScreen() {
   const [selected, setSelected] = useState<HospitalPlace>();
   const [mapStatus, setMapStatus] = useState<MapConnectionStatus>('loading');
   const [location, setLocation] = useState(DEFAULT_MAP_CENTER);
-  const [locationState, setLocationState] = useState<'loading' | 'ready' | 'manual' | 'denied'>('loading');
+  const [locationState, setLocationState] = useState<LocationState>('checking');
   const [locationLabel, setLocationLabel] = useState('서울 시청');
   const [areaQuery, setAreaQuery] = useState('');
   const [areaState, setAreaState] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -73,39 +76,87 @@ export default function HospitalScreen() {
   );
   const visibleCompanies = showAllCompanies ? companyDirectory : companyDirectory.slice(0, 8);
 
-  const findMyLocation = useCallback(async () => {
-    const permissionTimer = setTimeout(() => {
-      setLocationState((current) => current === 'loading' ? 'denied' : current);
-    }, 8000);
+  const applyPosition = useCallback((position: SimplePosition) => {
+    setLocation(position);
+    setLocationLabel('내 위치');
+    setLocationState('ready');
+  }, []);
+
+  const loadGrantedLocation = useCallback(async () => {
+    setLocationState('requesting');
+    let hasLastKnown = false;
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      clearTimeout(permissionTimer);
-      if (permission.status !== Location.PermissionStatus.GRANTED) {
-        setLocationState('denied');
+      if (Platform.OS === 'web') {
+        applyPosition(await getWebPosition());
         return;
       }
       const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 300000, requiredAccuracy: 1000 });
       if (lastKnown) {
-        setLocation({ latitude: lastKnown.coords.latitude, longitude: lastKnown.coords.longitude });
-        setLocationLabel('내 위치');
-        setLocationState('ready');
+        hasLastKnown = true;
+        applyPosition({ latitude: lastKnown.coords.latitude, longitude: lastKnown.coords.longitude });
       }
-      const positionTimer = setTimeout(() => {
-        if (!lastKnown) setLocationState('denied');
-      }, 10000);
-      try {
-        const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        setLocation({ latitude: current.coords.latitude, longitude: current.coords.longitude });
-        setLocationLabel('내 위치');
-        setLocationState('ready');
-      } finally {
-        clearTimeout(positionTimer);
-      }
+      const current = await withTimeout(
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        12000
+      );
+      applyPosition({ latitude: current.coords.latitude, longitude: current.coords.longitude });
     } catch {
-      clearTimeout(permissionTimer);
-      setLocationState('denied');
+      if (!hasLastKnown) setLocationState('unavailable');
     }
-  }, []);
+  }, [applyPosition]);
+
+  const requestMyLocation = useCallback(async () => {
+    setLocationState('requesting');
+    try {
+      if (Platform.OS === 'web') {
+        applyPosition(await getWebPosition());
+        return;
+      }
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        setLocationState('unavailable');
+        return;
+      }
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== Location.PermissionStatus.GRANTED) {
+        setLocationState('denied');
+        return;
+      }
+      await loadGrantedLocation();
+    } catch (error) {
+      setLocationState(isPermissionDeniedError(error) ? 'denied' : 'unavailable');
+    }
+  }, [applyPosition, loadGrantedLocation]);
+
+  const checkLocationPermission = useCallback(async () => {
+    setLocationState('checking');
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+          setLocationState('unavailable');
+          return;
+        }
+        if (!navigator.permissions?.query) {
+          setLocationState('prompt');
+          return;
+        }
+        const permission = await navigator.permissions.query({ name: 'geolocation' });
+        if (permission.state === 'granted') await loadGrantedLocation();
+        else setLocationState(permission.state === 'denied' ? 'denied' : 'prompt');
+        return;
+      }
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        setLocationState('unavailable');
+        return;
+      }
+      const permission = await Location.getForegroundPermissionsAsync();
+      if (permission.status === Location.PermissionStatus.GRANTED) await loadGrantedLocation();
+      else setLocationState(permission.status === Location.PermissionStatus.DENIED ? 'denied' : 'prompt');
+    } catch {
+      setLocationState('prompt');
+    }
+  }, [loadGrantedLocation]);
 
   const moveToArea = async () => {
     if (!areaQuery.trim()) return;
@@ -126,9 +177,9 @@ export default function HospitalScreen() {
   };
 
   useEffect(() => {
-    const task = setTimeout(() => void findMyLocation(), 0);
+    const task = setTimeout(() => void checkLocationPermission(), 0);
     return () => clearTimeout(task);
-  }, [findMyLocation]);
+  }, [checkLocationPermission]);
 
   const receiveResults = useCallback(async (nextPlaces: HospitalPlace[]) => {
     setPlaces(nextPlaces);
@@ -208,31 +259,43 @@ export default function HospitalScreen() {
       <View style={styles.mapSection}>
         <View style={styles.mapTopLine}>
           <View style={styles.locationLine}>
-            {locationState === 'loading' ? <ActivityIndicator size="small" color={palette.brand} /> : <View style={styles.locationDot} />}
+            {locationState === 'checking' || locationState === 'requesting' ? <ActivityIndicator size="small" color={palette.brand} /> : <View style={styles.locationDot} />}
             <Text style={styles.locationText}>
               {locationState === 'ready'
                 ? '현재 위치 주변'
                 : locationState === 'manual'
                   ? `${locationLabel} 주변 · 직접 선택`
                   : locationState === 'denied'
-                    ? '위치 권한이 꺼져 있어요'
-                    : '현재 위치 확인 중'}
+                    ? Platform.OS === 'web'
+                      ? '브라우저에서 위치를 차단했어요'
+                      : '위치 권한이 꺼져 있어요'
+                    : locationState === 'unavailable'
+                      ? '현재 위치를 찾지 못했어요'
+                      : locationState === 'prompt'
+                        ? '내 위치를 사용하면 더 정확해요'
+                        : locationState === 'requesting'
+                          ? '현재 위치를 찾고 있어요'
+                          : '위치 권한 확인 중'}
             </Text>
           </View>
-          {locationState === 'denied' || locationState === 'manual' ? (
+          {locationState === 'prompt' || locationState === 'denied' || locationState === 'unavailable' || locationState === 'manual' ? (
             <TextButton
-              label={locationState === 'manual' ? '내 위치로 찾기' : '위치 권한 확인'}
+              label={locationState === 'prompt' ? '내 위치 사용' : locationState === 'unavailable' ? '다시 시도' : locationState === 'manual' ? '내 위치로 찾기' : Platform.OS === 'web' ? '다시 확인' : '설정 열기'}
               onPress={() => {
-                setLocationState('loading');
-                void findMyLocation();
+                if (locationState === 'denied' && Platform.OS !== 'web') void Linking.openSettings();
+                else void requestMyLocation();
               }}
             />
           ) : null}
         </View>
-        {locationState === 'denied' ? (
+        {locationState === 'prompt' || locationState === 'denied' || locationState === 'unavailable' ? (
           <View style={styles.locationHelp}>
-            <Text style={styles.locationHelpTitle}>동네 이름으로도 찾을 수 있어요</Text>
-            <Text style={styles.locationHelpCopy}>위치 권한이 안 켜지면 역이나 동네 이름을 써 주세요.</Text>
+            <Text style={styles.locationHelpTitle}>
+              {locationState === 'prompt' ? '내 위치를 쓰면 가까운 순서로 보여드려요' : '동네 이름으로도 찾을 수 있어요'}
+            </Text>
+            <Text style={styles.locationHelpCopy}>
+              {locationState === 'prompt' ? '‘내 위치 사용’을 누르면 위치 권한을 물어봐요.' : locationState === 'denied' ? '권한을 다시 허용하거나 역·동네 이름을 써 주세요.' : 'GPS가 늦으면 역이나 동네 이름으로 바로 찾을 수 있어요.'}
+            </Text>
             <View style={styles.areaSearchRow}>
               <TextInput
                 accessibilityLabel="찾을 동네나 역"
@@ -256,7 +319,13 @@ export default function HospitalScreen() {
               </Pressable>
             </View>
             {areaState === 'error' ? <Text style={styles.areaError}>위치를 찾지 못했어요. 동이나 역 이름을 다시 써 주세요.</Text> : null}
-            <Text style={styles.locationPermissionTip}>내 위치를 쓰려면 브라우저의 사이트 설정에서 위치를 ‘허용’으로 바꿔 주세요.</Text>
+            <Text style={styles.locationPermissionTip}>
+              {locationState === 'denied'
+                ? Platform.OS === 'web'
+                  ? '브라우저 주소창의 사이트 설정에서 위치를 ‘허용’으로 바꾼 뒤 ‘다시 확인’을 눌러 주세요.'
+                  : '휴대폰 설정에서 이 앱의 위치 권한을 ‘앱을 사용하는 동안’으로 바꿔 주세요.'
+                : '위치는 주변 검색에만 쓰고 앱 서버에는 저장하지 않아요.'}
+            </Text>
           </View>
         ) : null}
         <View style={styles.mapFrame}>

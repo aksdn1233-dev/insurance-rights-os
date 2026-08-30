@@ -19,7 +19,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "가까운 병원을 거리순으로 보여드리기 위해 현재 위치를 사용해요."
+          "locationWhenInUsePermission": "가까운 병원과 보험사를 거리순으로 보여드리기 위해 현재 위치를 사용해요."
         }
       ],
       [
