@@ -55,6 +55,15 @@ export default function PrivacyScreen() {
         </Surface>
       </View>
 
+      <View style={styles.section}>
+        <SectionHeader title="콘텐츠와 시스템 보호" />
+        <Surface>
+          <DetailRow title="자동 수집·복제 금지" detail="분석 결과, 구조와 디자인을 AI 학습·데이터셋·유사 서비스 제작에 무단 사용하는 것을 금지해요." />
+          <DetailRow title="실제 기록 범위에서 대응" detail="후기 API의 요청 제한과 발급 영수증 등 확인 가능한 기록만 증거로 사용해요." />
+          <DetailRow title="과장하지 않아요" detail="공개 베타가 모든 침해자를 식별하거나 추적한다고 보장하지 않아요." last />
+        </Surface>
+      </View>
+
       <Text style={styles.footnote}>공개 베타 안내 · 2026년 8월 29일 기준</Text>
     </Page>
   );

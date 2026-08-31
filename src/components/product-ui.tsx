@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { palette, space, type } from '@/constants/product-theme';
+import { GLOBAL_BUSINESS_FOOTER_POLICY } from '@/content/business-protection';
 
 export function Page({
   children,
@@ -34,8 +35,19 @@ export function Page({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.page, contentStyle]}>
         {children}
+        <BusinessProtectionNotice />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+export function BusinessProtectionNotice() {
+  return (
+    <View style={styles.protectionNotice} accessibilityLabel="콘텐츠 보호 및 법적 안내">
+      <Text style={styles.protectionTitle}>콘텐츠 보호 안내 · 보호수준 B</Text>
+      <Text style={styles.protectionCopy}>{GLOBAL_BUSINESS_FOOTER_POLICY.notice}</Text>
+      <Text style={styles.protectionLimit}>{GLOBAL_BUSINESS_FOOTER_POLICY.limitation}</Text>
+    </View>
   );
 }
 
@@ -280,4 +292,13 @@ const styles = StyleSheet.create({
   actionChevron: { color: palette.brand, fontSize: 20, lineHeight: 20 },
   progressTrack: { height: 7, borderRadius: 999, backgroundColor: palette.line, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 999, backgroundColor: palette.brand },
+  protectionNotice: {
+    gap: 7,
+    paddingTop: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
+  },
+  protectionTitle: { ...type.caption, color: palette.ink, fontFamily: type.family, fontWeight: '700' },
+  protectionCopy: { ...type.caption, color: palette.muted, fontFamily: type.family, lineHeight: 20 },
+  protectionLimit: { ...type.caption, color: palette.muted, fontFamily: type.family },
 });
